@@ -6,6 +6,8 @@ import { sv } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { SkeletonPage } from '../components/Skeleton'
+import { ChevronLeft } from 'lucide-react'
 
 // ── date-fns localizer with Swedish locale ───────────────────────────────────
 
@@ -56,7 +58,7 @@ const formats = {
 // ── status colours ────────────────────────────────────────────────────────────
 
 const STATUS_COLOR = {
-  planerad: '#2563EB', // primary blue
+  planerad: '#0055FF', // primary blue
   pågående: '#D97706', // warning amber
   avslutad: '#16A34A', // success green
 }
@@ -136,15 +138,13 @@ export default function JobCalendar() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         <button
           onClick={() => navigate('/jobs')}
           className="text-gray-500 hover:text-gray-800 transition-colors p-1 -ml-1 rounded-lg"
           aria-label="Tillbaka"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
+          <ChevronLeft className="w-5 h-5" />
         </button>
 
         <h1 className="font-bold text-gray-800 text-lg flex-1">Kalender</h1>
@@ -158,7 +158,7 @@ export default function JobCalendar() {
             Lista
           </button>
           <button
-            className="px-3 py-1.5 rounded-md text-xs font-medium bg-white text-gray-800 shadow-sm"
+            className="px-3 py-1.5 rounded-md text-xs font-medium bg-white text-gray-800"
           >
             Kalender
           </button>
@@ -166,12 +166,12 @@ export default function JobCalendar() {
       </header>
 
       {/* Rotation tip — only visible on small screens (md:hidden) */}
-      <p className="md:hidden text-xs text-gray-400 text-center py-1.5 bg-white border-b border-gray-50">
+      <p className="md:hidden text-xs text-gray-400 text-center py-1.5 bg-white border-b border-gray-100">
         Tips: rotera telefonen för bättre vy
       </p>
 
       {/* Legend */}
-      <div className="px-4 py-2 flex items-center gap-4 bg-white border-b border-gray-50">
+      <div className="px-4 py-2 flex items-center gap-4 bg-white border-b border-gray-100">
         {Object.entries(STATUS_COLOR).map(([status, color]) => (
           <div key={status} className="flex items-center gap-1.5">
             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
@@ -186,14 +186,9 @@ export default function JobCalendar() {
       {/* Calendar */}
       <div className="flex-1 p-4">
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <svg className="animate-spin w-6 h-6 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-            </svg>
-          </div>
+          <SkeletonPage />
         ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden"
                style={{ height: 'calc(100vh - 180px)', minHeight: '500px' }}>
             <Calendar
               localizer={localizer}
@@ -219,44 +214,44 @@ export default function JobCalendar() {
       {/* Override react-big-calendar default styles to match app theme */}
       <style>{`
         .rbc-toolbar button {
-          color: #374151;
-          border: 1px solid #E5E7EB;
+          color: #444444;
+          border: 1px solid #E5E5E5;
           border-radius: 8px;
           padding: 4px 12px;
           font-size: 13px;
           font-weight: 500;
         }
         .rbc-toolbar button:hover {
-          background: #F3F4F6;
-          color: #111827;
+          background: #F0F0F0;
+          color: #111111;
         }
         .rbc-toolbar button.rbc-active {
-          background: #2563EB !important;
+          background: #0055FF !important;
           color: #fff !important;
-          border-color: #2563EB !important;
+          border-color: #0055FF !important;
         }
         .rbc-toolbar button.rbc-active:hover {
-          background: #1D4ED8 !important;
+          background: #0044CC !important;
         }
         .rbc-header {
           font-size: 12px;
           font-weight: 600;
-          color: #6B7280;
+          color: #666666;
           padding: 8px 4px;
           text-transform: uppercase;
           letter-spacing: 0.05em;
         }
         .rbc-today {
-          background-color: #EFF6FF !important;
+          background-color: #EEF4FF !important;
         }
         .rbc-off-range-bg {
-          background: #F9FAFB;
+          background: #F8F8F8;
         }
         .rbc-day-bg + .rbc-day-bg {
-          border-left: 1px solid #F3F4F6;
+          border-left: 1px solid #F0F0F0;
         }
         .rbc-month-row + .rbc-month-row {
-          border-top: 1px solid #F3F4F6;
+          border-top: 1px solid #F0F0F0;
         }
         .rbc-month-view {
           border: none;
@@ -265,14 +260,14 @@ export default function JobCalendar() {
           outline: none;
         }
         .rbc-show-more {
-          color: #2563EB;
+          color: #0055FF;
           font-size: 11px;
           font-weight: 600;
         }
         .rbc-toolbar .rbc-toolbar-label {
           font-size: 15px;
           font-weight: 700;
-          color: #111827;
+          color: #111111;
           text-transform: capitalize;
         }
       `}</style>

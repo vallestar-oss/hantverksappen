@@ -37,8 +37,8 @@ export default function CustomerNew() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: '#F8FAFC' }}>
-      <header className="bg-white border-b border-gray-100 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
+    <div className="min-h-screen" style={{ background: '#F8F8F8' }}>
+      <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         <button onClick={() => navigate('/customers')} className="text-gray-500 hover:text-gray-800 transition-colors p-1.5 -ml-1 rounded-xl hover:bg-gray-100" aria-label="Tillbaka">
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -46,7 +46,7 @@ export default function CustomerNew() {
       </header>
 
       <form onSubmit={handleSubmit} className="max-w-lg mx-auto px-4 py-6 space-y-4 pb-20">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-5">
 
           <Field label="Namn *">
             <input name="name" type="text" value={form.name} onChange={handleChange}
@@ -93,8 +93,8 @@ export default function CustomerNew() {
         )}
 
         <button type="submit" disabled={saving}
-          className="w-full bg-primary hover:bg-blue-700 active:bg-blue-800 disabled:opacity-60 text-white font-semibold h-12 rounded-xl transition-all shadow-sm">
-          {saving ? 'Sparar...' : 'Spara kund'}
+          className="w-full bg-primary hover:bg-primary-dark active:bg-primary-darker disabled:opacity-60 text-white font-semibold h-12 rounded-xl transition-all">
+          {saving ? 'Sparar…' : 'Spara kund'}
         </button>
       </form>
     </div>

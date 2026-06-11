@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import BottomNav from '../components/BottomNav'
-import { FileText, Plus, Loader2 } from 'lucide-react'
+import { FileText, Plus } from 'lucide-react'
+import { SkeletonListRow } from '../components/Skeleton'
 
 const STATUSES = [
   { key: 'alla',    label: 'Alla' },
@@ -73,10 +74,10 @@ export default function Quotes() {
   }, [quotes, activeFilter])
 
   return (
-    <div className="min-h-screen flex flex-col pb-20" style={{ background: '#F8FAFC' }}>
+    <div className="min-h-screen flex flex-col pb-20" style={{ background: '#F8F8F8' }}>
 
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-4 pt-4 pb-0 sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-200 px-4 pt-4 pb-0 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-3">
           <h1 className="font-bold text-gray-900 text-lg">Offerter</h1>
         </div>
@@ -89,7 +90,7 @@ export default function Quotes() {
               onClick={() => setActiveFilter(s.key)}
               className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all ${
                 activeFilter === s.key
-                  ? 'bg-primary text-white shadow-sm'
+                  ? 'bg-primary text-white'
                   : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}
             >
@@ -101,16 +102,16 @@ export default function Quotes() {
 
       <div className="px-4 pt-4 flex-1">
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-6 h-6 text-primary animate-spin" />
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => <SkeletonListRow key={i} />)}
           </div>
         ) : quotes.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+            <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center mb-4">
               <FileText className="w-8 h-8 text-gray-300" />
             </div>
             <p className="text-gray-600 font-semibold text-sm">Du har inga offerter ännu.</p>
-            <p className="text-gray-400 text-sm mt-1">Skapa din första offert!</p>
+            <p className="text-gray-400 text-sm mt-1">Skapa din första offert nedan.</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center py-20">
@@ -125,7 +126,7 @@ export default function Quotes() {
                 <button
                   key={quote.id}
                   onClick={() => navigate(`/quotes/${quote.id}`)}
-                  className="w-full flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3.5 text-left hover:shadow-md hover:border-gray-200 transition-all active:bg-gray-50"
+                  className="w-full flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3.5 text-left hover:border-gray-300 transition-all active:bg-gray-50"
                 >
                   {/* Icon */}
                   <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
@@ -159,7 +160,7 @@ export default function Quotes() {
       {/* FAB */}
       <button
         onClick={() => navigate('/quotes/new')}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-blue-700 active:bg-blue-800 text-white rounded-full shadow-lg shadow-blue-200 flex items-center justify-center transition-all z-10"
+        className="fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white rounded-full shadow-lg shadow-gray-900/15 flex items-center justify-center transition-all z-10"
         aria-label="Ny offert"
       >
         <Plus className="w-6 h-6" />

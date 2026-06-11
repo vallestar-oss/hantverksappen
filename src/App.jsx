@@ -22,6 +22,7 @@ import JobCalendar from './pages/JobCalendar'
 import Invoices from './pages/Invoices'
 import InvoiceNew from './pages/InvoiceNew'
 import InvoiceDetail from './pages/InvoiceDetail'
+import InvoiceEdit from './pages/InvoiceEdit'
 import Export from './pages/Export'
 
 function P({ children }) {
@@ -54,6 +55,7 @@ export default function App() {
           <Route path="/invoices" element={<P><Invoices /></P>} />
           <Route path="/invoices/new" element={<P><InvoiceNew /></P>} />
           <Route path="/invoices/:id" element={<P><InvoiceDetail /></P>} />
+          <Route path="/invoices/:id/edit" element={<P><InvoiceEdit /></P>} />
           <Route path="/export" element={<P><Export /></P>} />
         </Routes>
       </AuthProvider>

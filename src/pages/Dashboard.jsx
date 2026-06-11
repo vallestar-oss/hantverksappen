@@ -3,9 +3,10 @@ import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import BottomNav from '../components/BottomNav'
+import { SkeletonCard } from '../components/Skeleton'
 import {
   Settings, LogOut, Briefcase, Receipt, FileText, TrendingUp,
-  Plus, ChevronRight, Loader2
+  Plus, ChevronRight
 } from 'lucide-react'
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -123,13 +124,13 @@ export default function Dashboard() {
     navigate('/login')
   }
 
-  const greeting = companyName ? `Hej, ${companyName}!` : 'Hej!'
+  const greeting = companyName ? `Hej, ${companyName}` : 'Hej'
 
   return (
-    <div className="min-h-screen flex flex-col pb-20" style={{ background: '#F8FAFC' }}>
+    <div className="min-h-screen flex flex-col pb-20" style={{ background: '#F8F8F8' }}>
 
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-4 py-4 flex items-center justify-between sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between sticky top-0 z-10">
         <span className="font-bold text-primary text-lg tracking-tight">Hantverksappen</span>
         <div className="flex items-center gap-1">
           <button
@@ -160,8 +161,8 @@ export default function Dashboard() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-7 h-7 text-primary animate-spin" />
+          <div className="grid grid-cols-2 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
         ) : (
           <>
@@ -171,36 +172,28 @@ export default function Dashboard() {
                 label="Aktiva jobb"
                 value={stats.activeJobs}
                 Icon={Briefcase}
-                accentCls="text-primary"
-                bgCls="bg-blue-50"
-                borderCls="border-l-4 border-primary"
+                chipCls="bg-blue-50 text-primary"
                 onClick={() => navigate('/jobs')}
               />
               <StatCard
                 label="Utestående fakturor"
                 value={stats.unpaidInvoices}
                 Icon={Receipt}
-                accentCls="text-amber-600"
-                bgCls="bg-amber-50"
-                borderCls="border-l-4 border-amber-400"
+                chipCls="bg-amber-50 text-warning"
                 onClick={() => navigate('/invoices')}
               />
               <StatCard
                 label="Offerter att hantera"
                 value={stats.pendingQuotes}
                 Icon={FileText}
-                accentCls="text-gray-600"
-                bgCls="bg-gray-100"
-                borderCls="border-l-4 border-gray-300"
+                chipCls="bg-gray-100 text-gray-600"
                 onClick={() => navigate('/quotes')}
               />
               <StatCard
                 label="Månadsintäkt"
                 value={formatSEK(stats.monthlyRevenue)}
                 Icon={TrendingUp}
-                accentCls="text-green-600"
-                bgCls="bg-green-50"
-                borderCls="border-l-4 border-green-400"
+                chipCls="bg-green-50 text-success"
                 isText
                 onClick={() => navigate('/invoices')}
               />
@@ -210,7 +203,7 @@ export default function Dashboard() {
             <div className="flex gap-3">
               <button
                 onClick={() => navigate('/jobs/new')}
-                className="flex-1 flex items-center justify-center gap-2 bg-primary hover:bg-blue-700 active:bg-blue-800 text-white font-semibold h-11 rounded-xl transition-all shadow-sm text-sm"
+                className="flex-1 flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white font-semibold h-11 rounded-xl transition-all text-sm"
               >
                 <Plus className="w-4 h-4" />
                 Nytt jobb
@@ -244,7 +237,7 @@ export default function Dashboard() {
                       <Link
                         key={`${item.type}-${item.id}`}
                         to={item.path}
-                        className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 hover:shadow-md hover:border-gray-200 transition-all active:bg-gray-50"
+                        className="flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3 hover:border-gray-300 transition-all active:bg-gray-50"
                       >
                         <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
                           item.type === 'job' ? 'bg-blue-50' : 'bg-amber-50'
@@ -277,10 +270,10 @@ export default function Dashboard() {
             {/* Empty state */}
             {recentItems.length === 0 && (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
+                <div className="w-16 h-16 rounded-xl bg-blue-50 flex items-center justify-center mb-4">
                   <Briefcase className="w-8 h-8 text-primary" />
                 </div>
-                <p className="text-gray-700 font-semibold">Välkommen till Hantverksappen!</p>
+                <p className="text-gray-700 font-semibold">Välkommen till Hantverksappen</p>
                 <p className="text-gray-400 text-sm mt-1">Skapa ett jobb eller en offert för att komma igång.</p>
               </div>
             )}
@@ -295,19 +288,19 @@ export default function Dashboard() {
 
 // ── StatCard ───────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, Icon, accentCls, bgCls, borderCls, isText = false, onClick }) {
+function StatCard({ label, value, Icon, chipCls, isText = false, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`${bgCls} ${borderCls} rounded-2xl p-4 text-left hover:brightness-95 active:brightness-90 transition-all w-full`}
+      className="bg-white border border-gray-200 rounded-xl p-4 text-left hover:border-gray-300 active:bg-gray-50 transition-all duration-200 w-full"
     >
-      <div className="mb-3">
-        <Icon className={`w-5 h-5 ${accentCls}`} />
+      <div className={`inline-flex items-center justify-center w-8 h-8 rounded-lg mb-3 ${chipCls}`}>
+        <Icon className="w-4 h-4" />
       </div>
-      <p className={`${isText ? 'text-lg' : 'text-3xl'} font-bold ${accentCls} tabular-nums leading-none`}>
+      <p className={`${isText ? 'text-lg' : 'text-2xl'} font-bold text-gray-900 tabular-nums leading-none`}>
         {value}
       </p>
-      <p className="text-xs text-gray-500 font-medium mt-1.5 leading-tight">{label}</p>
+      <p className="text-xs text-gray-600 font-medium mt-1.5 leading-tight">{label}</p>
     </button>
   )
 }

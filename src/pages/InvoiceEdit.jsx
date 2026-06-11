@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { ChevronLeft, X, Plus, Info, Loader2 } from 'lucide-react'
-
-// ── helpers ────────────────────────────────────────────────────────────────
+import { ChevronLeft, X, Plus, Loader2, AlertTriangle } from 'lucide-react'
+import { SkeletonPage } from '../components/Skeleton'
 
 function todayISO() { return new Date().toISOString().slice(0, 10) }
 function plusDays(n) {
@@ -21,8 +20,6 @@ function emptyRow() {
 const UNITS = ['st', 'tim', 'm', 'm²', 'm³']
 const VAT_RATES = [25, 12, 6]
 
-// ── LineItem component ─────────────────────────────────────────────────────
-
 function LineItem({ row, onChange, onRemove }) {
   const total = (Number(row.quantity) || 0) * (Number(row.unit_price) || 0)
   const set = (field, value) => onChange({ ...row, [field]: value })
@@ -30,10 +27,8 @@ function LineItem({ row, onChange, onRemove }) {
   return (
     <div className="border border-gray-200 rounded-xl p-4 space-y-3 bg-gray-50/50">
       <div className="flex gap-2">
-        <input
-          type="text" value={row.description} onChange={e => set('description', e.target.value)}
-          placeholder="Beskrivning" className={inputClass + ' flex-1'}
-        />
+        <input type="text" value={row.description} onChange={e => set('description', e.target.value)}
+          placeholder="Beskrivning" className={inputClass + ' flex-1'} />
         <button type="button" onClick={onRemove}
           className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-xl text-gray-300 hover:text-danger hover:bg-red-50 transition-colors">
           <X className="w-5 h-5" />
@@ -73,16 +68,14 @@ function LineItem({ row, onChange, onRemove }) {
   )
 }
 
-// ── main page ──────────────────────────────────────────────────────────────
-
-export default function InvoiceNew() {
+export default function InvoiceEdit() {
+  const { id } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const jobIdParam = searchParams.get('job_id')
 
+  const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
   const [customers, setCustomers] = useState([])
-  const [linkedJob, setLinkedJob] = useState(null)
   const [customerId, setCustomerId] = useState('')
   const [invoiceDate, setInvoiceDate] = useState(todayISO())
   const [dueDate, setDueDate] = useState(plusDays(30))
@@ -93,48 +86,53 @@ export default function InvoiceNew() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  // Load customers
   useEffect(() => {
-    supabase.from('customers').select('id, name').eq('user_id', user.id).order('name')
-      .then(({ data }) => setCustomers(data ?? []))
-  }, [user.id])
+    async function load() {
+      const [{ data: invoice }, { data: custs }] = await Promise.all([
+        supabase
+          .from('invoices')
+          .select('*, invoice_items(*)')
+          .eq('id', id)
+          .eq('user_id', user.id)
+          .single(),
+        supabase
+          .from('customers')
+          .select('id, name')
+          .eq('user_id', user.id)
+          .order('name'),
+      ])
 
-  // Pre-fill from job
-  useEffect(() => {
-    if (!jobIdParam) return
-    async function fetchJob() {
-      const { data: job } = await supabase
-        .from('jobs')
-        .select('*, customers(id, name), quotes(id, rot_rut_enabled, rot_rut_type, quote_items(*))')
-        .eq('id', jobIdParam)
-        .eq('user_id', user.id)
-        .single()
-      if (!job) return
-      setLinkedJob(job)
-      setCustomerId(job.customer_id ?? '')
+      setCustomers(custs ?? [])
 
-      // Import quote items if linked quote exists
-      const qItems = job.quotes?.quote_items
-      if (qItems?.length > 0) {
-        setRows(qItems.map(item => ({
-          id: crypto.randomUUID(),
-          type: item.type ?? 'material',
-          description: item.description ?? '',
-          quantity: item.quantity ?? 1,
-          unit: item.unit ?? 'st',
-          unit_price: item.unit_price ?? '',
-          vat_rate: item.vat_rate ?? 25,
-        })))
-        if (job.quotes.rot_rut_enabled) {
-          setRotRut(true)
-          setRotRutType(job.quotes.rot_rut_type ?? 'rot')
-        }
+      if (!invoice) {
+        setNotFound(true)
+        setLoading(false)
+        return
       }
-    }
-    fetchJob()
-  }, [jobIdParam, user.id])
 
-  // ── Calculations ────────────────────────────────────────────────────────
+      setCustomerId(invoice.customer_id ?? '')
+      setInvoiceDate(invoice.invoice_date ?? todayISO())
+      setDueDate(invoice.due_date ?? plusDays(30))
+      setNotes(invoice.notes ?? '')
+      setRotRut(invoice.rot_rut_enabled ?? false)
+      setRotRutType(invoice.rot_rut_type ?? 'rot')
+      setRows(
+        (invoice.invoice_items ?? []).length > 0
+          ? invoice.invoice_items.map(item => ({
+              id: crypto.randomUUID(),
+              type: item.type ?? 'material',
+              description: item.description ?? '',
+              quantity: item.quantity ?? 1,
+              unit: item.unit ?? 'st',
+              unit_price: item.unit_price ?? '',
+              vat_rate: item.vat_rate ?? 25,
+            }))
+          : [emptyRow()]
+      )
+      setLoading(false)
+    }
+    load()
+  }, [id, user.id])
 
   const calc = useMemo(() => {
     const subtotal = rows.reduce((s, r) => s + (Number(r.quantity) || 0) * (Number(r.unit_price) || 0), 0)
@@ -152,56 +150,39 @@ export default function InvoiceNew() {
     return { subtotal, rotRutDeduction, vatByRate, totalInkMoms, toPay }
   }, [rows, rotRut])
 
-  // ── Row handlers ────────────────────────────────────────────────────────
-
-  function updateRow(id, updated) { setRows(prev => prev.map(r => r.id === id ? updated : r)) }
-  function removeRow(id) { setRows(prev => prev.filter(r => r.id !== id)) }
+  function updateRow(rowId, updated) { setRows(prev => prev.map(r => r.id === rowId ? updated : r)) }
+  function removeRow(rowId) { setRows(prev => prev.filter(r => r.id !== rowId)) }
   function addRow() { setRows(prev => [...prev, emptyRow()]) }
-
-  // ── Save ────────────────────────────────────────────────────────────────
 
   async function handleSave() {
     setError('')
     if (!customerId) { setError('Välj en kund för att spara fakturan.'); return }
     setSaving(true)
 
-    const year = new Date().getFullYear()
-    const { count } = await supabase
+    const { error: iErr } = await supabase
       .from('invoices')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .gte('created_at', `${year}-01-01`)
-
-    const seq = String((count ?? 0) + 1).padStart(3, '0')
-    const invoiceNumber = `${year}-${seq}`
-
-    const { data: invoice, error: iErr } = await supabase
-      .from('invoices')
-      .insert({
-        user_id: user.id,
+      .update({
         customer_id: customerId,
-        job_id: jobIdParam || null,
-        invoice_number: invoiceNumber,
-        status: 'obetald',
         invoice_date: invoiceDate || null,
         due_date: dueDate || null,
         notes: notes.trim() || null,
         rot_rut_enabled: rotRut,
         rot_rut_type: rotRut ? rotRutType : null,
       })
-      .select()
-      .single()
+      .eq('id', id)
+      .eq('user_id', user.id)
 
     if (iErr) {
-      console.error('Invoice insert error:', iErr)
       setError(`Kunde inte spara fakturan: ${iErr.message}`)
       setSaving(false)
       return
     }
 
+    await supabase.from('invoice_items').delete().eq('invoice_id', id)
+
     if (rows.length > 0) {
       const items = rows.map(r => ({
-        invoice_id: invoice.id,
+        invoice_id: id,
         type: r.type,
         description: r.description.trim() || null,
         quantity: Number(r.quantity) || 0,
@@ -211,26 +192,48 @@ export default function InvoiceNew() {
       }))
       const { error: liErr } = await supabase.from('invoice_items').insert(items)
       if (liErr) {
-        console.error('Invoice items error:', liErr)
         setError(`Raderna misslyckades: ${liErr.message}`)
         setSaving(false)
         return
       }
     }
 
-    navigate(`/invoices/${invoice.id}`)
+    navigate(`/invoices/${id}`, { state: { saved: true } })
   }
 
-  // ── Render ──────────────────────────────────────────────────────────────
+  if (loading) return <SkeletonPage />
+
+  if (notFound) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
+          <button onClick={() => navigate('/invoices')}
+            className="text-gray-500 hover:text-gray-800 transition-colors p-1.5 -ml-1 rounded-xl hover:bg-gray-100">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <h1 className="font-bold text-gray-900 text-lg">Redigera faktura</h1>
+        </header>
+        <div className="max-w-lg mx-auto px-4 py-16 flex flex-col items-center text-center">
+          <AlertTriangle className="w-10 h-10 text-gray-300 mb-4" />
+          <p className="text-gray-900 font-semibold text-sm">Fakturan hittades inte</p>
+          <p className="text-gray-500 text-sm mt-1">Den kan ha tagits bort eller så saknar du behörighet.</p>
+          <button onClick={() => navigate('/invoices')}
+            className="mt-6 inline-flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold h-11 px-6 rounded-xl transition-all duration-200">
+            Tillbaka till fakturor
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
-        <button onClick={() => navigate('/invoices')}
+        <button onClick={() => navigate(`/invoices/${id}`)}
           className="text-gray-500 hover:text-gray-800 transition-colors p-1 -ml-1 rounded-lg" aria-label="Tillbaka">
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <h1 className="font-bold text-gray-800 text-lg flex-1">Ny faktura</h1>
+        <h1 className="font-bold text-gray-800 text-lg flex-1">Redigera faktura</h1>
         <button type="button" onClick={handleSave} disabled={saving}
           className="text-sm font-semibold text-primary hover:text-primary-dark disabled:opacity-50 transition-colors px-1">
           {saving ? 'Sparar…' : 'Spara'}
@@ -239,17 +242,6 @@ export default function InvoiceNew() {
 
       <div className="max-w-lg mx-auto px-4 py-5 space-y-4 pb-20">
 
-        {/* Job banner */}
-        {linkedJob && (
-          <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
-            <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
-            <p className="text-sm text-blue-700">
-              Skapad från jobb: <span className="font-semibold">{linkedJob.title}</span>
-            </p>
-          </div>
-        )}
-
-        {/* Kund */}
         <Card title="Kund">
           <div>
             <label className={labelClass}>Kund *</label>
@@ -260,7 +252,6 @@ export default function InvoiceNew() {
           </div>
         </Card>
 
-        {/* Fakturadetaljer */}
         <Card title="Fakturadetaljer">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -279,7 +270,6 @@ export default function InvoiceNew() {
           </div>
         </Card>
 
-        {/* ROT/RUT */}
         <Card title="ROT/RUT-avdrag">
           <label className="flex items-center gap-3 cursor-pointer select-none">
             <div className="relative">
@@ -289,7 +279,6 @@ export default function InvoiceNew() {
             </div>
             <span className="text-sm font-medium text-gray-700">ROT/RUT-avdrag</span>
           </label>
-
           {rotRut && (
             <div className="space-y-3">
               <div className="flex gap-3">
@@ -320,7 +309,6 @@ export default function InvoiceNew() {
           )}
         </Card>
 
-        {/* Rader */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Rader</h2>
@@ -338,7 +326,6 @@ export default function InvoiceNew() {
           </button>
         </div>
 
-        {/* Sammanställning */}
         <Card title="Sammanställning">
           <div className="space-y-2 text-sm">
             <SummaryRow label="Delsumma ex. moms" value={formatSEK(calc.subtotal)} />
@@ -368,7 +355,6 @@ export default function InvoiceNew() {
         {error && <p className="text-sm text-danger px-1">{error}</p>}
       </div>
 
-      {/* Sticky total + save — the sum is always visible while building */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-20">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
           <div className="flex-1 min-w-0">
@@ -379,22 +365,16 @@ export default function InvoiceNew() {
               {formatSEK(calc.toPay)}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark active:bg-primary-darker disabled:opacity-60 text-white font-semibold h-11 px-6 rounded-xl transition-all duration-200"
-          >
+          <button type="button" onClick={handleSave} disabled={saving}
+            className="flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark active:bg-primary-darker disabled:opacity-60 text-white font-semibold h-11 px-6 rounded-xl transition-all duration-200">
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-            {saving ? 'Sparar…' : 'Spara faktura'}
+            {saving ? 'Sparar…' : 'Spara ändringar'}
           </button>
         </div>
       </div>
     </div>
   )
 }
-
-// ── Shared helpers ─────────────────────────────────────────────────────────
 
 const inputClass = 'w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent'
 const labelClass = 'block text-sm font-medium text-gray-700 mb-1'

@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hantverksappen — Allt du behöver. Ingenting du inte behöver.</title>
+<meta name="description" content="Offerter, jobb och fakturor i en app. ROT och RUT uträknat automatiskt. Byggd för svenska hantverkare.">
+<style>
+/* ───────────────────────────── Reset & tokens ───────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #F8F8F8;
+  --ink: #111111;
+  --ink-soft: #555555;
+  --ink-faint: #8A8A8A;
+  --line: #E4E4E4;
+  --blue: #0055FF;
+  --white: #FFFFFF;
+  --pad-y: 64px;
+  --pad-x: 24px;
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@media (min-width: 768px) {
+  :root { --pad-y: 96px; --pad-x: 48px; }
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+img, svg { display: block; max-width: 100%; }
+
+a { color: inherit; text-decoration: none; }
+
+.wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-left: var(--pad-x);
+  padding-right: var(--pad-x);
+}
+
+section { padding-top: var(--pad-y); padding-bottom: var(--pad-y); }
+
+/* ───────────────────────────── Type ───────────────────────────── */
+h1, h2, h3 { font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; }
+
+.display {
+  font-size: clamp(40px, 9vw, 88px);
+  font-weight: 900;
+}
+
+.headline {
+  font-size: clamp(30px, 5vw, 52px);
+}
+
+.sub {
+  font-size: clamp(17px, 2.2vw, 21px);
+  color: var(--ink-soft);
+  font-weight: 400;
+  line-height: 1.55;
+}
+
+.eyebrow {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--blue);
+  margin-bottom: 20px;
+}
+
+/* ───────────────────────────── Buttons ───────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 28px;
+  background: var(--blue);
+  color: var(--white);
+  font-family: var(--font);
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.btn:hover { background: #0042C8; }
+.btn:active { transform: scale(0.98); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+}
+.btn-ghost:hover { background: var(--ink); color: var(--white); }
+
+/* ───────────────────────────── Nav ───────────────────────────── */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  background: rgba(248, 248, 248, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.25s ease;
+}
+
+nav.scrolled { border-bottom-color: var(--line); }
+
+.nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+}
+
+.logo {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+.logo span { color: var(--blue); }
+
+.nav-links {
+  display: none;
+  gap: 36px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.nav-links a {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  transition: color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.nav-links a:hover { color: var(--ink); }
+
+.nav-cta {
+  min-height: 44px;
+  padding: 0 20px;
+  font-size: 15px;
+}
+
+@media (min-width: 768px) {
+  .nav-links { display: flex; }
+}
+
+/* ───────────────────────────── Hero ───────────────────────────── */
+.hero {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  padding-top: 100px;
+  padding-bottom: 48px;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 56px;
+  align-items: center;
+  width: 100%;
+}
+
+@media (min-width: 980px) {
+  .hero-grid { grid-template-columns: 1.15fr 0.85fr; gap: 32px; }
+}
+
+.hero h1 { margin-bottom: 24px; }
+.hero .sub { max-width: 440px; margin-bottom: 36px; }
+
+.hero-note {
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--ink-faint);
+}
+
+/* ───────────────────────────── Phone mockup ───────────────────────────── */
+.phone {
+  width: 290px;
+  margin: 0 auto;
+  background: var(--ink);
+  border-radius: 42px;
+  padding: 10px;
+  flex-shrink: 0;
+}
+
+.phone-screen {
+  background: var(--white);
+  border-radius: 32px;
+  overflow: hidden;
+  aspect-ratio: 9 / 19.2;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.phone-notch {
+  width: 86px;
+  height: 24px;
+  background: var(--ink);
+  border-radius: 14px;
+  margin: 10px auto 0;
+  flex-shrink: 0;
+}
+
+.app-header {
+  padding: 18px 18px 12px;
+}
+.app-header .app-date {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+}
+.app-header .app-title {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-top: 2px;
+}
+
+.app-rows { padding: 0 12px; display: flex; flex-direction: column; gap: 8px; }
+
+.app-row {
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-row-main { min-width: 0; }
+.app-row-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-row-sub { font-size: 11px; color: var(--ink-faint); margin-top: 1px; }
+
+.tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tag-blue { background: rgba(0, 85, 255, 0.1); color: var(--blue); }
+.tag-gray { background: #ECECEC; color: var(--ink-soft); }
+.tag-dark { background: var(--ink); color: var(--white); }
+
+.app-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  border-bottom: 1px solid #F0F0F0;
+}
+.app-line:last-child { border-bottom: none; }
+.app-line .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+.app-line.total { font-weight: 800; font-size: 13.5px; }
+.app-line.deduct .val { color: var(--blue); }
+
+.app-bigsum {
+  padding: 8px 18px 4px;
+}
+.app-bigsum .sum { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.app-bigsum .lbl { font-size: 11px; color: var(--ink-faint); }
+
+.app-btn {
+  margin: auto 14px 16px;
+  background: var(--blue);
+  color: var(--white);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+/* ───────────────────────────── Signature strip ───────────────────────────── */
+.strip-section {
+  background: var(--white);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.strip-head { margin-bottom: 56px; max-width: 560px; }
+
+.strip {
+  display: flex;
+  gap: 28px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 8px var(--pad-x) 24px;
+  margin: 0 calc(-1 * var(--pad-x));
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.strip::-webkit-scrollbar { display: none; }
+
+.strip-item {
+  scroll-snap-align: center;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.strip-item .phone { width: 250px; }
+
+.strip-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  letter-spacing: 0.02em;
+}
+
+@media (min-width: 1024px) {
+  .strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    overflow: visible;
+    margin: 0;
+    padding: 0;
+    gap: 32px;
+  }
+  .strip-item .phone { width: 100%; max-width: 240px; }
+}
+
+/* ───────────────────────────── Features ───────────────────────────── */
+.features-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 56px;
+  margin-top: 64px;
+}
+
+@media (min-width: 768px) {
+  .features-grid { grid-template-columns: repeat(3, 1fr); gap: 48px; }
+}
+
+.feature .num {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--blue);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 14px;
+}
+
+.feature h3 {
+  font-size: 22px;
+  margin-bottom: 12px;
+}
+
+.feature p {
+  font-size: 16px;
+  color: var(--ink-soft);
+  line-height: 1.6;
+  max-width: 340px;
+}
+
+/* ───────────────────────────── Social proof ───────────────────────────── */
+.proof {
+  background: var(--ink);
+  color: var(--white);
+}
+
+.proof blockquote {
+  font-size: clamp(24px, 4vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  max-width: 820px;
+}
+
+.proof cite {
+  display: block;
+  font-style: normal;
+  font-size: 16px;
+  font-weight: 500;
+  color: #9A9A9A;
+  margin-top: 28px;
+}
+.proof cite strong { color: var(--white); font-weight: 600; }
+
+.proof-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 40px 24px;
+  margin-top: 80px;
+  padding-top: 48px;
+  border-top: 1px solid #2A2A2A;
+}
+
+@media (min-width: 768px) {
+  .proof-stats { grid-template-columns: repeat(4, 1fr); }
+}
+
+.stat .stat-num {
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.stat .stat-lbl {
+  font-size: 14px;
+  color: #9A9A9A;
+  margin-top: 6px;
+}
+
+/* ───────────────────────────── Pricing ───────────────────────────── */
+.pricing-card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 48px 32px;
+  max-width: 480px;
+  margin: 56px auto 0;
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .pricing-card { padding: 64px 56px; }
+}
+
+.price {
+  font-size: clamp(48px, 8vw, 72px);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.price-unit { font-size: 16px; color: var(--ink-faint); margin-top: 10px; }
+
+.price-list {
+  list-style: none;
+  margin: 36px 0;
+  text-align: left;
+  display: inline-block;
+}
+.price-list li {
+  font-size: 16px;
+  padding: 9px 0 9px 30px;
+  position: relative;
+  color: var(--ink-soft);
+}
+.price-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 16px;
+  width: 14px;
+  height: 8px;
+  border-left: 2px solid var(--blue);
+  border-bottom: 2px solid var(--blue);
+  transform: rotate(-45deg);
+}
+
+.pricing-note {
+  font-size: 14px;
+  color: var(--ink-faint);
+  margin-top: 20px;
+}
+
+/* ───────────────────────────── CTA ───────────────────────────── */
+.cta { text-align: center; }
+.cta h2 { margin-bottom: 20px; }
+.cta .sub { max-width: 480px; margin: 0 auto 40px; }
+
+/* ───────────────────────────── Footer ───────────────────────────── */
+footer {
+  border-top: 1px solid var(--line);
+  padding: 48px 0;
+}
+
+.footer-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+@media (min-width: 768px) {
+  .footer-inner { flex-direction: row; justify-content: space-between; align-items: center; }
+}
+
+.footer-links { display: flex; flex-wrap: wrap; gap: 24px; }
+.footer-links a {
+  font-size: 14px;
+  color: var(--ink-faint);
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.footer-links a:hover { color: var(--ink); }
+
+.footer-copy { font-size: 14px; color: var(--ink-faint); }
+
+/* ───────────────────────────── Reveal animations ───────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.reveal.in { opacity: 1; transform: none; }
+
+.reveal-d1 { transition-delay: 0.1s; }
+.reveal-d2 { transition-delay: 0.2s; }
+.reveal-d3 { transition-delay: 0.3s; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .hero-phone { transform: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- ───────────────────────────── Nav ───────────────────────────── -->
+<nav id="nav">
+  <div class="wrap nav-inner">
+    <a href="#" class="logo">Hantverks<span>appen</span></a>
+    <div class="nav-links">
+      <a href="#funktioner">Funktioner</a>
+      <a href="#priser">Priser</a>
+      <a href="#kunder">Kunder</a>
+    </div>
+    <a href="#prova" class="btn nav-cta">Prova gratis</a>
+  </div>
+</nav>
+
+<!-- ───────────────────────────── Hero ───────────────────────────── -->
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <h1 class="display reveal">Allt du behöver.<br>Ingenting du inte behöver.</h1>
+      <p class="sub reveal reveal-d1">Offerter, jobb och fakturor i en app. Byggd för svenska hantverkare som hellre arbetar än administrerar.</p>
+      <div class="reveal reveal-d2">
+        <a href="#prova" class="btn">Prova gratis i 14 dagar</a>
+        <p class="hero-note">Inget kort behövs. Klar på fem minuter.</p>
+      </div>
+    </div>
+    <div class="reveal reveal-d2">
+      <div class="phone hero-phone" id="heroPhone">
+        <div class="phone-screen">
+          <div class="phone-notch"></div>
+          <div class="app-header">
+            <div class="app-date">Onsdag 10 juni</div>
+            <div class="app-title">Dagens jobb</div>
+          </div>
+          <div class="app-rows">
+            <div class="app-row">
+              <div class="app-row-main">
+                <div class="app-row-title">Badrumsrenovering · Fam. Ek</div>
+                <div class="app-row-sub">Solrosvägen 14, Täby</div>
+              </div>
+              <span class="tag tag-blue">Pågår</span>
+            </div>
+            <div class="app-row">
+              <div class="app-row-main">
+                <div class="app-row-title">Elcentral · Brf Vinkeln</div>
+                <div class="app-row-sub">13:00 · Sundbyberg</div>
+              </div>
+              <span class="tag tag-gray">Bokad</span>
+            </div>
+            <div class="app-row">
+              <div class="app-row-main">
+                <div class="app-row-title">Altan, etapp 2 · Sjögren</div>
+                <div class="app-row-sub">15:30 · Vallentuna</div>
+              </div>
+              <span class="tag tag-gray">Bokad</span>
+            </div>
+            <div class="app-row">
+              <div class="app-row-main">
+                <div class="app-row-title">Garageport · Nyberg</div>
+                <div class="app-row-sub">Offert väntar på svar</div>
+              </div>
+              <span class="tag tag-dark">Offert</span>
+            </div>
+          </div>
+          <div class="app-btn">Nytt jobb</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ───────────────────────────── Signature strip ───────────────────────────── -->
+<section class="strip-section" id="funktioner">
+  <div class="wrap">
+    <div class="strip-head">
+      <p class="eyebrow reveal">Appen</p>
+      <h2 class="headline reveal reveal-d1">Fyra skärmar.<br>Hela arbetsdagen.</h2>
+    </div>
+    <div class="strip">
+
+      <div class="strip-item reveal">
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="phone-notch"></div>
+            <div class="app-header">
+              <div class="app-date">Offert · Nr 1042</div>
+              <div class="app-title">Fam. Nyberg</div>
+            </div>
+            <div>
+              <div class="app-line"><span>Arbete, 16 tim</span><span class="val">12 800 kr</span></div>
+              <div class="app-line"><span>Garageport, motor</span><span class="val">9 450 kr</span></div>
+              <div class="app-line"><span>Material, övrigt</span><span class="val">1 200 kr</span></div>
+              <div class="app-line deduct"><span>ROT-avdrag</span><span class="val">−3 840 kr</span></div>
+              <div class="app-line total"><span>Att betala</span><span class="val">19 610 kr</span></div>
+            </div>
+            <div class="app-btn">Skicka för signering</div>
+          </div>
+        </div>
+        <span class="strip-label">Offert</span>
+      </div>
+
+      <div class="strip-item reveal reveal-d1">
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="phone-notch"></div>
+            <div class="app-header">
+              <div class="app-date">Jobb · Pågår</div>
+              <div class="app-title">Badrum, Fam. Ek</div>
+            </div>
+            <div class="app-rows">
+              <div class="app-row">
+                <div class="app-row-main">
+                  <div class="app-row-title">Tid i dag</div>
+                  <div class="app-row-sub">Startad 07:12</div>
+                </div>
+                <span class="tag tag-blue">6,5 tim</span>
+              </div>
+              <div class="app-row">
+                <div class="app-row-main">
+                  <div class="app-row-title">Material</div>
+                  <div class="app-row-sub">14 rader registrerade</div>
+                </div>
+                <span class="tag tag-gray">8 470 kr</span>
+              </div>
+              <div class="app-row">
+                <div class="app-row-main">
+                  <div class="app-row-title">Foton</div>
+                  <div class="app-row-sub">Före och efter</div>
+                </div>
+                <span class="tag tag-gray">12 st</span>
+              </div>
+            </div>
+            <div class="app-btn">Markera som klart</div>
+          </div>
+        </div>
+        <span class="strip-label">Jobb</span>
+      </div>
+
+      <div class="strip-item reveal reveal-d2">
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="phone-notch"></div>
+            <div class="app-header">
+              <div class="app-date">Faktura · Nr 2318</div>
+              <div class="app-title">Brf Vinkeln</div>
+            </div>
+            <div class="app-bigsum">
+              <div class="sum">24 380 kr</div>
+              <div class="lbl">Förfaller 24 juni</div>
+            </div>
+            <div>
+              <div class="app-line"><span>Skapad från jobb</span><span class="val">10 juni</span></div>
+              <div class="app-line"><span>Skickad till kund</span><span class="val">10 juni</span></div>
+              <div class="app-line"><span>Status</span><span class="val" style="color:#0055FF">Skickad</span></div>
+            </div>
+            <div class="app-btn">Visa faktura</div>
+          </div>
+        </div>
+        <span class="strip-label">Faktura</span>
+      </div>
+
+      <div class="strip-item reveal reveal-d3">
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="phone-notch"></div>
+            <div class="app-header">
+              <div class="app-date">ROT-avdrag</div>
+              <div class="app-title">Fam. Sjögren</div>
+            </div>
+            <div>
+              <div class="app-line"><span>Arbetskostnad</span><span class="val">48 000 kr</span></div>
+              <div class="app-line deduct"><span>ROT, 30 %</span><span class="val">−14 400 kr</span></div>
+              <div class="app-line total"><span>Kund betalar</span><span class="val">33 600 kr</span></div>
+              <div class="app-line"><span>Kvar av kundens tak</span><span class="val">35 600 kr</span></div>
+            </div>
+            <div class="app-btn">Begär utbetalning</div>
+          </div>
+        </div>
+        <span class="strip-label">ROT-avdrag</span>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────────── Three features ───────────────────────────── -->
+<section>
+  <div class="wrap">
+    <p class="eyebrow reveal">Därför</p>
+    <h2 class="headline reveal reveal-d1" style="max-width: 640px;">Mindre kontor.<br>Mer verkstad.</h2>
+    <div class="features-grid">
+      <div class="feature reveal">
+        <div class="num">01</div>
+        <h3>Offert på fem minuter</h3>
+        <p>Skriv offerten i bilen, direkt efter besöket. Kunden får den på mejl och signerar på skärmen. Inga papper som glöms i handskfacket.</p>
+      </div>
+      <div class="feature reveal reveal-d1">
+        <div class="num">02</div>
+        <h3>ROT och RUT, uträknat</h3>
+        <p>Avdraget räknas ut automatiskt och följer med från offert till faktura. Underlaget till Skatteverket skapas åt dig.</p>
+      </div>
+      <div class="feature reveal reveal-d2">
+        <div class="num">03</div>
+        <h3>Fakturera samma dag</h3>
+        <p>När jobbet är klart är fakturan nästan det också. Tid och material ligger redan där. Skicka innan du kör hem.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────────── Social proof ───────────────────────────── -->
+<section class="proof" id="kunder">
+  <div class="wrap">
+    <blockquote class="reveal">
+      ”Jag skickade min första offert från fikarasten. Kunden hade signerat innan jag druckit upp kaffet.”
+    </blockquote>
+    <cite class="reveal reveal-d1"><strong>Mikael Lindqvist</strong> · Elektriker, Lindqvist El AB, Örebro</cite>
+    <div class="proof-stats">
+      <div class="stat reveal"><div class="stat-num">4 200</div><div class="stat-lbl">hantverkare använder appen</div></div>
+      <div class="stat reveal reveal-d1"><div class="stat-num">31 000</div><div class="stat-lbl">fakturor skickade i maj</div></div>
+      <div class="stat reveal reveal-d2"><div class="stat-num">5 min</div><div class="stat-lbl">från klart jobb till faktura</div></div>
+      <div class="stat reveal reveal-d3"><div class="stat-num">4,8 av 5</div><div class="stat-lbl">i betyg på App Store</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────────── Pricing ───────────────────────────── -->
+<section id="priser">
+  <div class="wrap">
+    <div style="text-align: center;">
+      <p class="eyebrow reveal">Priser</p>
+      <h2 class="headline reveal reveal-d1">Ett pris. Allt ingår.</h2>
+    </div>
+    <div class="pricing-card reveal reveal-d2">
+      <div class="price">349 kr</div>
+      <div class="price-unit">per användare och månad, exkl. moms</div>
+      <ul class="price-list">
+        <li>Offerter med e-signering</li>
+        <li>Jobb, tid och material</li>
+        <li>Fakturering och påminnelser</li>
+        <li>ROT- och RUT-underlag</li>
+        <li>Obegränsat antal kunder och jobb</li>
+        <li>Support på svenska, vardagar 7–17</li>
+      </ul>
+      <div>
+        <a href="#prova" class="btn" style="width: 100%;">Prova gratis i 14 dagar</a>
+      </div>
+      <p class="pricing-note">Ingen bindningstid. Avsluta när du vill.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────────── CTA ───────────────────────────── -->
+<section class="cta" id="prova" style="background: var(--white); border-top: 1px solid var(--line);">
+  <div class="wrap">
+    <h2 class="headline reveal">Börja i dag.<br>Fakturera i morgon.</h2>
+    <p class="sub reveal reveal-d1">Ladda ner appen, lägg in ditt företag och skicka din första offert. Det tar fem minuter, inte fem veckor.</p>
+    <div class="reveal reveal-d2">
+      <a href="#" class="btn">Prova gratis i 14 dagar</a>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────────── Footer ───────────────────────────── -->
+<footer>
+  <div class="wrap footer-inner">
+    <a href="#" class="logo">Hantverks<span>appen</span></a>
+    <div class="footer-links">
+      <a href="#funktioner">Funktioner</a>
+      <a href="#priser">Priser</a>
+      <a href="#">Support</a>
+      <a href="#">Integritet</a>
+      <a href="#">Villkor</a>
+    </div>
+    <p class="footer-copy">© 2026 Hantverksappen AB, Stockholm</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Nav border on scroll
+  var nav = document.getElementById('nav');
+  function onNavScroll() {
+    nav.classList.toggle('scrolled', window.scrollY > 8);
+  }
+  window.addEventListener('scroll', onNavScroll, { passive: true });
+  onNavScroll();
+
+  // Scroll reveals
+  var revealEls = document.querySelectorAll('.reveal');
+  if (reduceMotion || !('IntersectionObserver' in window)) {
+    revealEls.forEach(function (el) { el.classList.add('in'); });
+  } else {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: '0px 0px -10% 0px', threshold: 0.1 });
+    revealEls.forEach(function (el) { io.observe(el); });
+  }
+
+  // Subtle parallax on hero phone
+  var heroPhone = document.getElementById('heroPhone');
+  if (heroPhone && !reduceMotion) {
+    var ticking = false;
+    window.addEventListener('scroll', function () {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () {
+        var y = window.scrollY;
+        if (y < window.innerHeight) {
+          heroPhone.style.transform = 'translateY(' + (y * -0.06).toFixed(1) + 'px)';
+        }
+        ticking = false;
+      });
+    }, { passive: true });
+  }
+})();
+</script>
+
+</body>
+</html>

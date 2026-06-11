@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { ChevronLeft, X, Plus, Loader2 } from 'lucide-react'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -40,7 +41,7 @@ function LineItem({ row, onChange, onRemove }) {
   }
 
   return (
-    <div className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50/50">
+    <div className="border border-gray-200 rounded-xl p-4 space-y-3 bg-gray-50/50">
       {/* Description + remove */}
       <div className="flex gap-2">
         <input
@@ -56,9 +57,7 @@ function LineItem({ row, onChange, onRemove }) {
           className="w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-xl text-gray-300 hover:text-danger hover:bg-red-50 transition-colors"
           aria-label="Ta bort rad"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <X className="w-5 h-5" />
         </button>
       </div>
 
@@ -266,24 +265,22 @@ export default function QuoteNew() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         <button
           onClick={() => navigate('/quotes')}
           className="text-gray-500 hover:text-gray-800 transition-colors p-1 -ml-1 rounded-lg"
           aria-label="Tillbaka"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
+          <ChevronLeft className="w-5 h-5" />
         </button>
         <h1 className="font-bold text-gray-800 text-lg flex-1">Ny offert</h1>
         <button
           type="button"
           onClick={() => handleSave('utkast')}
           disabled={saving}
-          className="text-sm font-semibold text-primary hover:text-blue-700 disabled:opacity-50 transition-colors px-1"
+          className="text-sm font-semibold text-primary hover:text-primary-dark disabled:opacity-50 transition-colors px-1"
         >
-          {saving ? 'Sparar...' : 'Spara'}
+          {saving ? 'Sparar…' : 'Spara'}
         </button>
       </header>
 
@@ -409,9 +406,10 @@ export default function QuoteNew() {
           <button
             type="button"
             onClick={addRow}
-            className="w-full border-2 border-dashed border-gray-200 rounded-xl py-3 text-sm font-medium text-gray-400 hover:border-primary hover:text-primary transition-colors"
+            className="w-full flex items-center justify-center gap-1.5 border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm font-medium text-gray-600 hover:border-primary hover:text-primary transition-colors duration-200"
           >
-            + Lägg till rad
+            <Plus className="w-4 h-4" />
+            Lägg till rad
           </button>
         </div>
 
@@ -428,13 +426,13 @@ export default function QuoteNew() {
               />
             )}
 
-            <div className="border-t border-gray-100 pt-2 mt-2 space-y-2">
+            <div className="border-t border-gray-200 pt-2 mt-2 space-y-2">
               {VAT_RATES.filter(r => (calc.vatByRate[r] ?? 0) > 0).map(r => (
                 <SummaryRow key={r} label={`Moms ${r}%`} value={formatSEK(calc.vatByRate[r])} className="text-gray-500" />
               ))}
             </div>
 
-            <div className="border-t border-gray-100 pt-2 mt-2">
+            <div className="border-t border-gray-200 pt-2 mt-2">
               <SummaryRow label="Totalt ink. moms" value={formatSEK(calc.totalInkMoms)} />
             </div>
 
@@ -450,16 +448,29 @@ export default function QuoteNew() {
         </Card>
 
         {error && <p className="text-sm text-danger px-1">{error}</p>}
+      </div>
 
-        {/* Save button */}
-        <button
-          type="button"
-          onClick={() => handleSave('utkast')}
-          disabled={saving}
-          className="w-full bg-primary hover:bg-blue-700 active:bg-blue-800 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-colors duration-150 shadow-sm"
-        >
-          {saving ? 'Sparar...' : 'Spara offert'}
-        </button>
+      {/* Sticky total + save — the sum is always visible while building */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-20">
+        <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-gray-600 leading-tight">
+              {rotRut ? 'Att betala efter ROT/RUT' : 'Att betala'}
+            </p>
+            <p className="text-lg font-bold text-gray-900 tabular-nums leading-tight">
+              {formatSEK(calc.toPay)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleSave('utkast')}
+            disabled={saving}
+            className="flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark active:bg-primary-darker disabled:opacity-60 text-white font-semibold h-11 px-6 rounded-xl transition-all duration-200"
+          >
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            {saving ? 'Sparar…' : 'Spara offert'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -474,7 +485,7 @@ const labelClass = 'block text-sm font-medium text-gray-700 mb-1'
 
 function Card({ title, children }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
       <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{title}</h2>
       {children}
     </div>

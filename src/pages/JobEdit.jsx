@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { ChevronLeft, AlertCircle, Loader2, Trash2 } from 'lucide-react'
+import { SkeletonPage } from '../components/Skeleton'
+import { useConfirmDialog } from '../hooks/useConfirmDialog'
 
 export default function JobEdit() {
   const { id } = useParams()
@@ -15,6 +17,7 @@ export default function JobEdit() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState('')
+  const { confirmDialog, confirm } = useConfirmDialog()
 
   useEffect(() => {
     async function load() {
@@ -56,24 +59,24 @@ export default function JobEdit() {
   }
 
   async function handleDelete() {
-    if (!window.confirm('Är du säker på att du vill radera detta jobb?')) return
+    const ok = await confirm(
+      'Radera jobb',
+      'Är du säker på att du vill radera detta jobb? Detta går inte att ångra.'
+    )
+    if (!ok) return
     setDeleting(true)
     const { error } = await supabase.from('jobs').delete().eq('id', id).eq('user_id', user.id)
     if (error) { setError('Kunde inte radera jobbet. Försök igen.'); setDeleting(false) }
     else navigate('/jobs')
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#F8FAFC' }}>
-        <Loader2 className="w-7 h-7 text-primary animate-spin" />
-      </div>
-    )
-  }
+  if (loading) return <SkeletonPage />
 
   return (
-    <div className="min-h-screen" style={{ background: '#F8FAFC' }}>
-      <header className="bg-white border-b border-gray-100 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
+    <>
+      {confirmDialog}
+      <div className="min-h-screen" style={{ background: '#F8F8F8' }}>
+      <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         <button onClick={() => navigate(`/jobs/${id}`)} className="text-gray-500 hover:text-gray-800 transition-colors p-1.5 -ml-1 rounded-xl hover:bg-gray-100" aria-label="Tillbaka">
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -81,7 +84,7 @@ export default function JobEdit() {
       </header>
 
       <form onSubmit={handleSubmit} className="max-w-lg mx-auto px-4 py-5 space-y-4 pb-20">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-5">
 
           <Field label="Titel *">
             <input name="title" type="text" value={form.title} onChange={handleChange}
@@ -123,17 +126,18 @@ export default function JobEdit() {
         )}
 
         <button type="submit" disabled={saving || deleting}
-          className="w-full bg-primary hover:bg-blue-700 active:bg-blue-800 disabled:opacity-60 text-white font-semibold h-12 rounded-xl transition-all shadow-sm">
-          {saving ? 'Sparar...' : 'Spara ändringar'}
+          className="w-full bg-primary hover:bg-primary-dark active:bg-primary-darker disabled:opacity-60 text-white font-semibold h-12 rounded-xl transition-all">
+          {saving ? 'Sparar…' : 'Spara ändringar'}
         </button>
 
         <button type="button" onClick={handleDelete} disabled={saving || deleting}
           className="w-full flex items-center justify-center gap-2 bg-white border border-danger/25 hover:bg-red-50 active:bg-red-100 disabled:opacity-60 text-danger font-semibold h-12 rounded-xl transition-all">
           <Trash2 className="w-4 h-4" />
-          {deleting ? 'Raderar...' : 'Radera jobb'}
+          {deleting ? 'Raderar…' : 'Radera jobb'}
         </button>
       </form>
     </div>
+    </>
   )
 }
 

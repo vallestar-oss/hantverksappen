@@ -1,8 +1,14 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate, useParams, Link } from 'react-router-dom'
+import { useNavigate, useParams, Link, useLocation } from 'react-router-dom'
+import { SkeletonPage } from '../components/Skeleton'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { generateInvoicePDF } from '../utils/generateInvoicePDF'
+import { useConfirmDialog } from '../hooks/useConfirmDialog'
+import {
+  ChevronLeft, Pencil, AlertTriangle, Check, Phone, Mail,
+  Download, Bell, X, Trash2,
+} from 'lucide-react'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -66,13 +72,17 @@ export default function InvoiceDetail() {
   const { id } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const [savedBanner, setSavedBanner] = useState(location.state?.saved === true)
 
   const [invoice, setInvoice] = useState(null)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [paying, setPaying] = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState('')
+  const { confirmDialog, confirm } = useConfirmDialog()
 
   useEffect(() => {
     async function load() {
@@ -121,6 +131,28 @@ export default function InvoiceDetail() {
     setPaying(false)
   }
 
+  async function handleDelete() {
+    const ok = await confirm(
+      'Radera faktura',
+      'Är du säker på att du vill radera denna faktura? Detta går inte att ångra.'
+    )
+    if (!ok) return
+    setDeleting(true)
+    setError('')
+    const { error: itemsErr } = await supabase
+      .from('invoice_items')
+      .delete()
+      .eq('invoice_id', id)
+    if (itemsErr) { setError('Kunde inte radera fakturan. Försök igen.'); setDeleting(false); return }
+    const { error: invErr } = await supabase
+      .from('invoices')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id)
+    if (invErr) { setError('Kunde inte radera fakturan. Försök igen.'); setDeleting(false) }
+    else navigate('/invoices')
+  }
+
   async function handleDownloadPDF() {
     setPdfLoading(true)
     try {
@@ -139,16 +171,7 @@ export default function InvoiceDetail() {
 
   // ── loading ────────────────────────────────────────────────────────────
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <svg className="animate-spin w-6 h-6 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-        </svg>
-      </div>
-    )
-  }
+  if (loading) return <SkeletonPage />
 
   const status = effectiveStatus(invoice)
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.obetald
@@ -158,33 +181,40 @@ export default function InvoiceDetail() {
   const overdueDays = isOverdue ? daysOverdue(invoice.due_date) : 0
 
   return (
+    <>
+      {confirmDialog}
     <div className="min-h-screen bg-gray-50 pb-20">
 
       {/* ── Header ── */}
-      <header className="bg-white border-b border-gray-100 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         <button onClick={() => navigate('/invoices')}
           className="text-gray-500 hover:text-gray-800 transition-colors p-1 -ml-1 rounded-lg" aria-label="Tillbaka">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
+          <ChevronLeft className="w-5 h-5" />
         </button>
         <h1 className="font-bold text-gray-800 text-lg flex-1 truncate">
           Faktura {invoice.invoice_number ?? '–'}
         </h1>
         <button onClick={() => navigate(`/invoices/${id}/edit`)}
           className="text-gray-400 hover:text-gray-700 transition-colors p-1 rounded-lg" aria-label="Redigera">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H8v-2.414a2 2 0 01.586-1.414z" />
-          </svg>
+          <Pencil className="w-5 h-5" />
         </button>
       </header>
+
+      {/* Saved banner */}
+      {savedBanner && (
+        <div className="bg-green-50 border-b border-green-100 px-5 py-3 flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-success flex-shrink-0" />
+          <span className="text-sm font-semibold text-success flex-1">Fakturan sparades</span>
+          <button onClick={() => setSavedBanner(false)} className="text-green-400 hover:text-green-600 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* ── Overdue banner (above status bar when overdue) ── */}
       {isOverdue && (
         <div className="bg-red-600 px-5 py-2.5 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-white flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
+          <AlertTriangle className="w-4 h-4 text-white flex-shrink-0" />
           <div>
             <span className="text-white font-bold text-sm">FÖRSENAD</span>
             <span className="text-red-200 text-sm ml-2">
@@ -209,7 +239,7 @@ export default function InvoiceDetail() {
 
         {/* ── Outstanding / Paid amount hero ── */}
         {!isPaid ? (
-          <div className={`rounded-2xl px-5 py-4 border ${isOverdue ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'}`}>
+          <div className={`rounded-xl px-5 py-4 border ${isOverdue ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'}`}>
             <p className={`text-xs font-semibold uppercase tracking-wide mb-1 ${isOverdue ? 'text-danger' : 'text-warning'}`}>
               Att betala
             </p>
@@ -226,11 +256,9 @@ export default function InvoiceDetail() {
             )}
           </div>
         ) : (
-          <div className="rounded-2xl px-5 py-4 bg-green-50 border border-green-100 flex items-center gap-3">
+          <div className="rounded-xl px-5 py-4 bg-green-50 border border-green-100 flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
+              <Check className="w-5 h-5 text-success" strokeWidth={2.5} />
             </div>
             <div>
               <p className="text-xs font-semibold text-success uppercase tracking-wide">Betald</p>
@@ -245,11 +273,9 @@ export default function InvoiceDetail() {
         {/* ── Markera som betald — only when unpaid ── */}
         {!isPaid && (
           <button onClick={handleMarkPaid} disabled={paying}
-            className="w-full flex items-center justify-center gap-2 bg-success hover:bg-green-700 active:bg-green-800 disabled:opacity-60 text-white font-bold py-4 rounded-xl transition-colors shadow-sm text-base">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-            {paying ? 'Uppdaterar...' : 'Markera som betald'}
+            className="w-full flex items-center justify-center gap-2 bg-success hover:bg-green-700 active:bg-green-800 disabled:opacity-60 text-white font-bold py-4 rounded-xl transition-colors text-base">
+            <Check className="w-5 h-5" strokeWidth={2.5} />
+            {paying ? 'Uppdaterar…' : 'Markera som betald'}
           </button>
         )}
 
@@ -276,18 +302,14 @@ export default function InvoiceDetail() {
               {invoice.customers.phone && (
                 <a href={`tel:${invoice.customers.phone}`}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-gray-50 hover:bg-gray-100 rounded-xl text-sm text-gray-600 transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                  </svg>
+                  <Phone className="w-4 h-4" />
                   Ring
                 </a>
               )}
               {invoice.customers.email && (
                 <a href={`mailto:${invoice.customers.email}`}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-gray-50 hover:bg-gray-100 rounded-xl text-sm text-gray-600 transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
+                  <Mail className="w-4 h-4" />
                   E-post
                 </a>
               )}
@@ -340,7 +362,7 @@ export default function InvoiceDetail() {
             <div className="overflow-x-auto -mx-5 px-5">
               <table className="w-full text-sm min-w-[420px]">
                 <thead>
-                  <tr className="border-b border-gray-100">
+                  <tr className="border-b border-gray-200">
                     <th className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2">Beskrivning</th>
                     <th className="text-center text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 px-2">Typ</th>
                     <th className="text-right text-xs font-semibold text-gray-400 uppercase tracking-wide pb-2 px-2">Antal</th>
@@ -354,7 +376,7 @@ export default function InvoiceDetail() {
                     const isArbete = item.type === 'arbete'
                     return (
                       <tr key={item.id}
-                        className={`border-b border-gray-50 last:border-0 ${invoice.rot_rut_enabled && isArbete ? 'bg-amber-50/40' : ''}`}>
+                        className={`border-b border-gray-100 last:border-0 ${invoice.rot_rut_enabled && isArbete ? 'bg-amber-50/40' : ''}`}>
                         <td className="py-2.5 pr-2">
                           <span className="text-gray-800 font-medium">{item.description || '–'}</span>
                           <span className="block text-xs text-gray-400">Moms {item.vat_rate ?? 25}%</span>
@@ -396,13 +418,13 @@ export default function InvoiceDetail() {
               />
             )}
 
-            <div className="border-t border-gray-100 pt-2 space-y-2">
+            <div className="border-t border-gray-200 pt-2 space-y-2">
               {VAT_RATES.filter(r => (totals.vatByRate[r] ?? 0) > 0).map(r => (
                 <SummaryRow key={r} label={`Moms ${r}%`} value={formatSEK(totals.vatByRate[r])} />
               ))}
             </div>
 
-            <div className="border-t border-gray-100 pt-2">
+            <div className="border-t border-gray-200 pt-2">
               <SummaryRow label="Totalt ink. moms" value={formatSEK(totals.totalInkMoms)} />
             </div>
 
@@ -426,35 +448,39 @@ export default function InvoiceDetail() {
           className="w-full flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-60 text-gray-700 font-semibold py-3 rounded-xl transition-colors">
           {pdfLoading ? (
             <>
-              <svg className="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-              </svg>
-              Genererar PDF...
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Genererar PDF…
             </>
           ) : (
             <>
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
+              <Download className="w-4 h-4" />
               Ladda ner PDF
             </>
           )}
         </button>
 
-        {/* ── Skicka påminnelse — only when unpaid ── */}
-        {!isPaid && (
-          <button
-            onClick={() => alert('Påminnelsefunktionen är inte tillgänglig ännu.')}
-            className="w-full flex items-center justify-center gap-2 bg-white border border-amber-300 hover:bg-amber-50 active:bg-amber-100 text-warning font-semibold py-3 rounded-xl transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
+        {/* ── Skicka påminnelse — only when unpaid and customer has email ── */}
+        {!isPaid && invoice.customers?.email && (
+          <a
+            href={`mailto:${invoice.customers.email}?subject=${encodeURIComponent(`Påminnelse: Faktura ${invoice.invoice_number ?? ''}`)}&body=${encodeURIComponent(`Hej ${invoice.customers.name ?? ''},\n\nDetta är en vänlig påminnelse om faktura ${invoice.invoice_number ?? ''} på ${formatSEK(totals.toPay)}${invoice.due_date ? ` med förfallodatum ${formatDate(invoice.due_date)}` : ''}.\n\nMed vänliga hälsningar`)}`}
+            className="w-full flex items-center justify-center gap-2 bg-white border border-amber-300 hover:bg-amber-50 active:bg-amber-100 text-warning font-semibold py-3 rounded-xl transition-colors duration-200">
+            <Bell className="w-4 h-4" />
             Skicka påminnelse
-          </button>
+          </a>
         )}
+
+        {/* ── Radera faktura ── */}
+        <button
+          onClick={handleDelete}
+          disabled={deleting || paying}
+          className="w-full flex items-center justify-center gap-2 bg-white border border-red-200 hover:bg-red-50 active:bg-red-100 disabled:opacity-60 text-red-600 font-semibold h-12 rounded-xl transition-all"
+        >
+          <Trash2 className="w-4 h-4" />
+          {deleting ? 'Raderar…' : 'Radera faktura'}
+        </button>
       </div>
     </div>
+    </>
   )
 }
 
@@ -462,7 +488,7 @@ export default function InvoiceDetail() {
 
 function Card({ title, children }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
       <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{title}</h2>
       {children}
     </div>

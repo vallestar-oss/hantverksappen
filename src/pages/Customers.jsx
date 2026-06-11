@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import BottomNav from '../components/BottomNav'
-import { Settings, Search, Plus, ChevronRight, Users, Loader2 } from 'lucide-react'
+import { Settings, Search, Plus, ChevronRight, Users } from 'lucide-react'
+import { SkeletonRow } from '../components/Skeleton'
 
 export default function Customers() {
   const { user } = useAuth()
@@ -36,10 +37,10 @@ export default function Customers() {
   }, [customers, query])
 
   return (
-    <div className="min-h-screen flex flex-col pb-20" style={{ background: '#F8FAFC' }}>
+    <div className="min-h-screen flex flex-col pb-20" style={{ background: '#F8F8F8' }}>
 
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-4 py-4 flex items-center justify-between sticky top-0 z-10">
+      <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between sticky top-0 z-10">
         <h1 className="font-bold text-gray-900 text-lg">Kunder</h1>
         <button
           onClick={() => navigate('/settings')}
@@ -66,16 +67,16 @@ export default function Customers() {
 
       <div className="px-4 flex-1">
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-6 h-6 text-primary animate-spin" />
+          <div className="space-y-2 mt-2">
+            {Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}
           </div>
         ) : customers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+            <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center mb-4">
               <Users className="w-8 h-8 text-gray-300" />
             </div>
             <p className="text-gray-600 font-semibold text-sm">Du har inga kunder ännu.</p>
-            <p className="text-gray-400 text-sm mt-1">Lägg till din första kund!</p>
+            <p className="text-gray-400 text-sm mt-1">Lägg till din första kund nedan.</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -87,7 +88,7 @@ export default function Customers() {
               <button
                 key={customer.id}
                 onClick={() => navigate(`/customers/${customer.id}`)}
-                className="w-full flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3.5 text-left hover:shadow-md hover:border-gray-200 transition-all active:bg-gray-50"
+                className="w-full flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3.5 text-left hover:border-gray-300 transition-all active:bg-gray-50"
               >
                 {/* Avatar */}
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -114,7 +115,7 @@ export default function Customers() {
       {/* FAB */}
       <button
         onClick={() => navigate('/customers/new')}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-blue-700 active:bg-blue-800 text-white rounded-full shadow-lg shadow-blue-200 flex items-center justify-center transition-all z-10"
+        className="fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white rounded-full shadow-lg shadow-gray-900/15 flex items-center justify-center transition-all z-10"
         aria-label="Lägg till kund"
       >
         <Plus className="w-6 h-6" />
