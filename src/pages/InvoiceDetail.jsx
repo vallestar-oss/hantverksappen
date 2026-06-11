@@ -194,7 +194,7 @@ export default function InvoiceDetail() {
           <ChevronLeft className="w-5 h-5" />
         </button>
         <h1 className="relative font-bold text-white text-lg flex-1 truncate tracking-tight">
-          Faktura {invoice.invoice_number ?? '–'}
+          Faktura #{invoice.invoice_number ?? '–'}
         </h1>
         <button onClick={() => navigate(`/invoices/${id}/edit`)}
           className="relative text-gray-400 hover:text-white transition-colors p-1 rounded-lg" aria-label="Redigera">
@@ -320,7 +320,7 @@ export default function InvoiceDetail() {
         {/* ── Fakturadetaljer ── */}
         <Card title="Fakturadetaljer">
           <DetailRow label="Fakturanummer">
-            <span className="text-sm font-semibold text-gray-800">{invoice.invoice_number ?? '–'}</span>
+            <span className="text-sm font-semibold text-gray-800">#{invoice.invoice_number ?? '–'}</span>
           </DetailRow>
           <DetailRow label="Fakturadatum">
             <span className="text-sm text-gray-800">{formatDate(invoice.invoice_date)}</span>

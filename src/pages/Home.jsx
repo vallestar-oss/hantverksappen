@@ -73,6 +73,374 @@ function Stat({ value, label, delay }) {
   )
 }
 
+// ─── Device mockups ────────────────────────────────────────────────────────────
+
+function LaptopMockup() {
+  return (
+    <div className="relative inline-block" style={{ width: 540, maxWidth: '100%' }}>
+      {/* Outer frame */}
+      <div
+        className="relative rounded-xl overflow-hidden"
+        style={{
+          background: 'linear-gradient(145deg, #d0d0d0 0%, #b8b8b8 50%, #c8c8c8 100%)',
+          padding: '10px 10px 0 10px',
+          boxShadow: '0 32px 64px rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.12)',
+        }}
+      >
+        {/* Screen bezel */}
+        <div
+          className="rounded-t-lg overflow-hidden"
+          style={{ background: '#1a1a1a', padding: '6px 6px 0 6px' }}
+        >
+          {/* Camera dot */}
+          <div className="flex justify-center mb-1">
+            <div className="w-1.5 h-1.5 rounded-full bg-gray-600" />
+          </div>
+
+          {/* Screen content */}
+          <div
+            className="rounded-t-sm overflow-hidden"
+            style={{ background: '#111111', aspectRatio: '16/10' }}
+          >
+            <div className="flex h-full">
+              {/* Sidebar */}
+              <div className="flex-shrink-0 flex flex-col gap-1 p-3" style={{ width: '18%', background: '#1a1a1a' }}>
+                {/* Logo area */}
+                <div className="flex items-center gap-1.5 mb-3 px-1">
+                  <div className="w-4 h-4 rounded bg-blue-600 flex-shrink-0" />
+                  <div className="h-2 rounded-full flex-1 bg-gray-700" />
+                </div>
+                {/* Nav items */}
+                {[true, false, false, false, false].map((active, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded"
+                    style={{ background: active ? '#0055FF22' : 'transparent' }}
+                  >
+                    <div
+                      className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                      style={{ background: active ? '#0055FF' : '#444' }}
+                    />
+                    <div
+                      className="h-1.5 rounded-full flex-1"
+                      style={{ background: active ? '#0055FF88' : '#333' }}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Content area */}
+              <div className="flex-1 p-3 overflow-hidden" style={{ background: '#F8F8F8' }}>
+                {/* Top bar */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="h-3 w-20 rounded-full bg-gray-800 opacity-80" />
+                  <div className="h-5 w-16 rounded-md" style={{ background: '#0055FF' }} />
+                </div>
+
+                {/* Stat cards */}
+                <div className="grid grid-cols-4 gap-1.5 mb-3">
+                  {[
+                    { bg: '#EEF4FF', accent: '#0055FF' },
+                    { bg: '#FFF8EE', accent: '#F59E0B' },
+                    { bg: '#F0FFF4', accent: '#22C55E' },
+                    { bg: '#F5F5F5', accent: '#94A3B8' },
+                  ].map((c, i) => (
+                    <div key={i} className="rounded-lg p-2" style={{ background: c.bg }}>
+                      <div className="w-3 h-3 rounded-sm mb-1.5" style={{ background: c.accent, opacity: 0.8 }} />
+                      <div className="h-2.5 w-8 rounded-full mb-1" style={{ background: c.accent, opacity: 0.7 }} />
+                      <div className="h-1.5 w-12 rounded-full" style={{ background: c.accent, opacity: 0.25 }} />
+                    </div>
+                  ))}
+                </div>
+
+                {/* List rows */}
+                <div className="space-y-1.5">
+                  {[
+                    { dot: '#0055FF', w1: 32, w2: 24 },
+                    { dot: '#22C55E', w1: 44, w2: 32 },
+                    { dot: '#F59E0B', w1: 28, w2: 20 },
+                    { dot: '#94A3B8', w1: 38, w2: 28 },
+                  ].map((row, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 rounded-lg px-2 py-1.5"
+                      style={{ background: 'white', border: '1px solid #E5E7EB' }}
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: row.dot }} />
+                      <div className="flex-1 flex gap-2">
+                        <div className="h-2 rounded-full" style={{ width: row.w1, background: '#374151' }} />
+                        <div className="h-2 rounded-full" style={{ width: row.w2, background: '#D1D5DB' }} />
+                      </div>
+                      <div className="h-2 w-10 rounded-full" style={{ background: '#E5E7EB' }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Keyboard hint bar */}
+        <div
+          className="h-4 rounded-b-sm"
+          style={{ background: 'linear-gradient(to bottom, #c0c0c0, #a8a8a8)' }}
+        />
+      </div>
+
+      {/* Base / hinge */}
+      <div
+        className="mx-auto rounded-b-xl"
+        style={{
+          height: 8,
+          width: '90%',
+          background: 'linear-gradient(to bottom, #b0b0b0, #989898)',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        }}
+      />
+    </div>
+  )
+}
+
+function PhoneMockup({ size = 'lg' }) {
+  const isSmall = size === 'sm'
+  const w = isSmall ? 120 : 200
+  const h = isSmall ? 216 : 360
+
+  return (
+    <div
+      className="relative inline-block rounded-3xl overflow-hidden flex-shrink-0"
+      style={{
+        width: w,
+        height: h,
+        background: 'linear-gradient(145deg, #2a2a2a 0%, #1a1a1a 100%)',
+        border: '2px solid #333',
+        boxShadow: isSmall
+          ? '0 12px 32px rgba(0,0,0,0.25)'
+          : '0 24px 56px rgba(0,0,0,0.30), 0 8px 24px rgba(0,0,0,0.18)',
+        padding: isSmall ? 4 : 6,
+      }}
+    >
+      {/* Notch */}
+      <div
+        className="absolute top-0 left-1/2 -translate-x-1/2 rounded-b-xl z-10"
+        style={{
+          width: isSmall ? 36 : 60,
+          height: isSmall ? 10 : 16,
+          background: '#1a1a1a',
+        }}
+      />
+
+      {/* Screen */}
+      <div
+        className="relative w-full h-full rounded-2xl overflow-hidden flex flex-col"
+        style={{ background: '#F8F8F8' }}
+      >
+        {/* Status bar space */}
+        <div style={{ height: isSmall ? 12 : 20 }} />
+
+        {/* Content */}
+        <div className="flex-1 p-2 overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-2">
+            <div
+              className="rounded-full"
+              style={{ height: isSmall ? 6 : 10, width: isSmall ? 28 : 48, background: '#111' }}
+            />
+            <div
+              className="rounded-md"
+              style={{
+                height: isSmall ? 10 : 18,
+                width: isSmall ? 20 : 32,
+                background: '#0055FF',
+              }}
+            />
+          </div>
+
+          {/* Job cards */}
+          {[
+            { dot: '#0055FF', badge: '#EEF4FF' },
+            { dot: '#22C55E', badge: '#F0FFF4' },
+            { dot: '#F59E0B', badge: '#FFF8EE' },
+          ].slice(0, isSmall ? 2 : 3).map((card, i) => (
+            <div
+              key={i}
+              className="rounded-xl mb-1.5 p-2"
+              style={{
+                background: 'white',
+                border: '1px solid #E5E7EB',
+                padding: isSmall ? '4px 6px' : '8px 10px',
+              }}
+            >
+              <div className="flex items-center gap-1.5 mb-1">
+                <div
+                  className="rounded-full flex-shrink-0"
+                  style={{ width: isSmall ? 4 : 6, height: isSmall ? 4 : 6, background: card.dot }}
+                />
+                <div
+                  className="rounded-full flex-1"
+                  style={{ height: isSmall ? 4 : 7, background: '#374151' }}
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <div
+                  className="rounded-full"
+                  style={{ height: isSmall ? 3 : 5, width: isSmall ? 28 : 48, background: '#D1D5DB' }}
+                />
+                <div
+                  className="rounded-full ml-auto"
+                  style={{
+                    height: isSmall ? 8 : 14,
+                    width: isSmall ? 16 : 28,
+                    background: card.badge,
+                    border: `1px solid ${card.dot}33`,
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Bottom nav */}
+        <div
+          className="flex items-center justify-around"
+          style={{
+            height: isSmall ? 24 : 40,
+            background: 'white',
+            borderTop: '1px solid #E5E7EB',
+          }}
+        >
+          {[true, false, false, false].map((active, i) => (
+            <div key={i} className="flex flex-col items-center gap-0.5">
+              <div
+                className="rounded-sm"
+                style={{
+                  width: isSmall ? 10 : 16,
+                  height: isSmall ? 10 : 16,
+                  background: active ? '#0055FF' : '#D1D5DB',
+                  borderRadius: isSmall ? 2 : 3,
+                }}
+              />
+              {!isSmall && (
+                <div className="rounded-full" style={{ width: 20, height: 3, background: active ? '#0055FF55' : '#E5E7EB' }} />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function QuoteSnippet({ size = 'sm' }) {
+  const w = 120, h = 216
+  return (
+    <div
+      className="relative inline-block rounded-3xl overflow-hidden flex-shrink-0"
+      style={{
+        width: w, height: h,
+        background: 'linear-gradient(145deg, #2a2a2a, #1a1a1a)',
+        border: '2px solid #333',
+        boxShadow: '0 12px 32px rgba(0,0,0,0.25)',
+        padding: 4,
+      }}
+    >
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 rounded-b-xl z-10"
+        style={{ width: 36, height: 10, background: '#1a1a1a' }} />
+      <div className="w-full h-full rounded-2xl overflow-hidden flex flex-col"
+        style={{ background: '#F8F8F8' }}>
+        <div style={{ height: 12 }} />
+        <div className="flex-1 p-2 overflow-hidden">
+          <div className="h-1.5 w-16 rounded-full bg-gray-800 mb-2 opacity-80" />
+          {[
+            { label: 60, amount: 28 },
+            { label: 44, amount: 24 },
+            { label: 52, amount: 20 },
+          ].map((row, i) => (
+            <div key={i} className="flex items-center justify-between mb-1.5 px-1.5 py-1 rounded-lg bg-white"
+              style={{ border: '1px solid #E5E7EB' }}>
+              <div className="h-1.5 rounded-full bg-gray-400" style={{ width: row.label }} />
+              <div className="h-1.5 rounded-full bg-gray-700" style={{ width: row.amount }} />
+            </div>
+          ))}
+          {/* ROT badge */}
+          <div className="mt-2 rounded-lg p-1.5" style={{ background: '#F0FFF4', border: '1px solid #BBF7D0' }}>
+            <div className="h-1.5 w-20 rounded-full" style={{ background: '#22C55E', opacity: 0.7 }} />
+            <div className="h-1.5 w-14 rounded-full mt-1" style={{ background: '#22C55E', opacity: 0.4 }} />
+          </div>
+          {/* Total */}
+          <div className="mt-2 rounded-lg p-1.5" style={{ background: '#111' }}>
+            <div className="flex justify-between">
+              <div className="h-2 w-12 rounded-full bg-gray-500" />
+              <div className="h-2 w-16 rounded-full bg-white opacity-80" />
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-around" style={{ height: 24, background: 'white', borderTop: '1px solid #E5E7EB' }}>
+          {[true, false, false, false].map((active, i) => (
+            <div key={i} className="rounded-sm w-2.5 h-2.5"
+              style={{ background: active ? '#0055FF' : '#D1D5DB', borderRadius: 2 }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function InvoiceSnippet() {
+  return (
+    <div
+      className="relative inline-block rounded-3xl overflow-hidden flex-shrink-0"
+      style={{
+        width: 120, height: 216,
+        background: 'linear-gradient(145deg, #2a2a2a, #1a1a1a)',
+        border: '2px solid #333',
+        boxShadow: '0 12px 32px rgba(0,0,0,0.25)',
+        padding: 4,
+      }}
+    >
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 rounded-b-xl z-10"
+        style={{ width: 36, height: 10, background: '#1a1a1a' }} />
+      <div className="w-full h-full rounded-2xl overflow-hidden flex flex-col"
+        style={{ background: '#F8F8F8' }}>
+        <div style={{ height: 12 }} />
+        <div className="flex-1 p-2 overflow-hidden">
+          <div className="flex items-center justify-between mb-2">
+            <div className="h-1.5 w-14 rounded-full bg-gray-800 opacity-80" />
+            <div className="h-4 w-10 rounded-full" style={{ background: '#EEF4FF', border: '1px solid #BFDBFE' }}>
+              <div className="h-1.5 w-6 mx-auto mt-1 rounded-full" style={{ background: '#0055FF', opacity: 0.6 }} />
+            </div>
+          </div>
+          {[40, 52, 36].map((w, i) => (
+            <div key={i} className="flex items-center justify-between mb-1 px-1.5 py-1 rounded-lg bg-white"
+              style={{ border: '1px solid #E5E7EB' }}>
+              <div className="h-1.5 rounded-full bg-gray-400" style={{ width: w }} />
+              <div className="h-1.5 rounded-full bg-gray-600" style={{ width: 22 }} />
+            </div>
+          ))}
+          <div className="mt-2 rounded-lg p-1.5" style={{ background: '#F0FFF4', border: '1px solid #BBF7D0' }}>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#22C55E' }} />
+              <div className="h-1.5 w-16 rounded-full" style={{ background: '#22C55E', opacity: 0.6 }} />
+            </div>
+          </div>
+          <div className="mt-1.5 rounded-lg p-1.5" style={{ background: '#111' }}>
+            <div className="flex justify-between">
+              <div className="h-2 w-10 rounded-full bg-gray-500" />
+              <div className="h-2 w-14 rounded-full bg-white opacity-80" />
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-around" style={{ height: 24, background: 'white', borderTop: '1px solid #E5E7EB' }}>
+          {[false, false, true, false].map((active, i) => (
+            <div key={i} className="w-2.5 h-2.5 rounded-sm"
+              style={{ background: active ? '#0055FF' : '#D1D5DB', borderRadius: 2 }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -185,6 +553,9 @@ export default function Home() {
               >
                 Kom igång gratis
               </button>
+              <p className="text-center text-[12px] font-medium" style={{ color: '#666666' }}>
+                ✓ 60 dagar gratis — inget kreditkort krävs
+              </p>
             </div>
           </div>
         )}
@@ -231,20 +602,25 @@ export default function Home() {
           </motion.p>
 
           {/* CTA row */}
-          <motion.div {...up(0.18)} className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
-            <button
-              onClick={() => navigate('/signup')}
-              className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-primary-dark active:bg-primary-darker text-white font-semibold text-[16px] px-8 py-4 rounded-xl transition-all hover:-translate-y-px"
-            >
-              Kom igång gratis
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-            </button>
-            <a
-              href="#features"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white text-slate-700 font-semibold text-[16px] px-8 py-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all"
-            >
-              Se hur det fungerar
-            </a>
+          <motion.div {...up(0.18)} className="flex flex-col items-center mb-12">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full">
+              <button
+                onClick={() => navigate('/signup')}
+                className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-primary-dark active:bg-primary-darker text-white font-semibold text-[16px] px-8 py-4 rounded-xl transition-all hover:-translate-y-px"
+              >
+                Kom igång gratis
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+              <a
+                href="#features"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white text-slate-700 font-semibold text-[16px] px-8 py-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all"
+              >
+                Se hur det fungerar
+              </a>
+            </div>
+            <p className="mt-3 text-[13px] font-medium" style={{ color: '#666666' }}>
+              ✓ 60 dagar gratis — inget kreditkort krävs
+            </p>
           </motion.div>
 
           {/* Trust strip */}
@@ -253,7 +629,7 @@ export default function Home() {
           >
             <span className="flex items-center gap-1.5">
               <Check className="w-3.5 h-3.5 text-blue-600" strokeWidth={3} />
-              Ingen bindningstid
+              60 dagar gratis
             </span>
             <span className="w-px h-3.5 bg-slate-200" />
             <span className="flex items-center gap-1.5">
@@ -344,6 +720,150 @@ export default function Home() {
             </div>
           </div>
         </motion.div>
+      </section>
+
+
+      {/* ── Device showcase ────────────────────────────────────────────────── */}
+      <section className="py-24 sm:py-36 overflow-hidden" style={{ background: '#F5F5F5' }}>
+        <div className="max-w-6xl mx-auto px-6">
+
+          {/* Heading */}
+          <motion.div {...up(0)} className="text-center mb-16">
+            <Eyebrow>Se appen i action</Eyebrow>
+            <h2 className="mt-5 text-4xl sm:text-5xl font-bold text-slate-900 tracking-tight leading-[1.1]">
+              Allt du behöver,
+              <br />alltid tillgängligt
+            </h2>
+            <p className="mt-5 text-[17px] text-slate-500 leading-relaxed">
+              Fungerar på dator, surfplatta och mobil
+            </p>
+          </motion.div>
+
+          {/* Mockup composition */}
+          <motion.div {...up(0.1)}>
+            {/* Desktop: laptop + phone overlapping */}
+            <div className="hidden md:flex items-end justify-center gap-0 relative">
+              <div className="relative z-10">
+                <LaptopMockup />
+              </div>
+              <div
+                className="relative z-20 -ml-8 mb-6"
+                style={{ transform: 'rotate(-6deg)', transformOrigin: 'bottom center' }}
+              >
+                <PhoneMockup size="lg" />
+              </div>
+            </div>
+
+            {/* Mobile: phone only */}
+            <div className="flex md:hidden justify-center">
+              <PhoneMockup size="lg" />
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+
+      {/* ── Feature highlights ─────────────────────────────────────────────── */}
+      <section className="py-28 sm:py-36 bg-white">
+        <div className="max-w-5xl mx-auto px-6">
+
+          <motion.div {...up(0)} className="text-center mb-20">
+            <Eyebrow>Hur det fungerar</Eyebrow>
+            <h2 className="mt-5 text-4xl sm:text-5xl font-bold text-slate-900 tracking-tight leading-[1.1]">
+              Tre steg till en bättre arbetsdag
+            </h2>
+          </motion.div>
+
+          <div className="space-y-24">
+
+            {/* 1 — Offert */}
+            <motion.div {...up(0)} className="grid md:grid-cols-2 gap-12 items-center">
+              <div className="flex justify-center md:justify-start">
+                <div style={{ transform: 'rotate(3deg)' }}>
+                  <QuoteSnippet />
+                </div>
+              </div>
+              <div>
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white text-[13px] font-bold mb-5">1</span>
+                <h3 className="text-3xl font-bold text-slate-900 tracking-tight leading-snug mb-4">
+                  Skapa offert på minuter
+                </h3>
+                <p className="text-[16px] text-slate-500 leading-relaxed mb-5">
+                  Välj arbetsmoment, lägg till material och markera vad som gäller
+                  ROT eller RUT. Appen räknar ut avdraget automatiskt och sätter
+                  rätt belopp på kundens offert.
+                </p>
+                <ul className="space-y-2.5">
+                  {['ROT och RUT beräknas automatiskt', 'Kunden godkänner med ett klick', 'Skickas direkt via e-post'].map(item => (
+                    <li key={item} className="flex items-center gap-2.5 text-[14px] text-slate-600 font-medium">
+                      <Check className="w-4 h-4 text-blue-600 flex-shrink-0" strokeWidth={2.5} />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </motion.div>
+
+            <div className="border-t border-slate-100" />
+
+            {/* 2 — Faktura */}
+            <motion.div {...up(0)} className="grid md:grid-cols-2 gap-12 items-center">
+              <div className="md:order-2 flex justify-center md:justify-end">
+                <div style={{ transform: 'rotate(-3deg)' }}>
+                  <InvoiceSnippet />
+                </div>
+              </div>
+              <div className="md:order-1">
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white text-[13px] font-bold mb-5">2</span>
+                <h3 className="text-3xl font-bold text-slate-900 tracking-tight leading-snug mb-4">
+                  Fakturera direkt från jobbet
+                </h3>
+                <p className="text-[16px] text-slate-500 leading-relaxed mb-5">
+                  När jobbet är klart skapar du fakturan med ett tryck. PDF-export,
+                  bankgiro och Swish är klart ur lådan — utan extra inställningar.
+                </p>
+                <ul className="space-y-2.5">
+                  {['PDF-export på sekunder', 'Bankgiro och Swish inbyggt', 'Faktura direkt från godkänd offert'].map(item => (
+                    <li key={item} className="flex items-center gap-2.5 text-[14px] text-slate-600 font-medium">
+                      <Check className="w-4 h-4 text-blue-600 flex-shrink-0" strokeWidth={2.5} />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </motion.div>
+
+            <div className="border-t border-slate-100" />
+
+            {/* 3 — Jobb */}
+            <motion.div {...up(0)} className="grid md:grid-cols-2 gap-12 items-center">
+              <div className="flex justify-center md:justify-start">
+                <div style={{ transform: 'rotate(3deg)' }}>
+                  <PhoneMockup size="sm" />
+                </div>
+              </div>
+              <div>
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white text-[13px] font-bold mb-5">3</span>
+                <h3 className="text-3xl font-bold text-slate-900 tracking-tight leading-snug mb-4">
+                  Håll koll på alla jobb
+                </h3>
+                <p className="text-[16px] text-slate-500 leading-relaxed mb-5">
+                  Se status på alla pågående och planerade jobb i en vy.
+                  Aldrig mer glömda jobb eller missad deadline.
+                </p>
+                <ul className="space-y-2.5">
+                  {['Alla jobb samlade på ett ställe', 'Status uppdateras i realtid', 'Fungerar lika bra på mobilen'].map(item => (
+                    <li key={item} className="flex items-center gap-2.5 text-[14px] text-slate-600 font-medium">
+                      <Check className="w-4 h-4 text-blue-600 flex-shrink-0" strokeWidth={2.5} />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </motion.div>
+
+          </div>
+        </div>
       </section>
 
 
@@ -532,26 +1052,30 @@ export default function Home() {
             </div>
 
             <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 tracking-tight leading-[1.1] mb-5">
-              Kom igång gratis idag.
+              60 dagar helt gratis.
             </h2>
 
             <p className="text-[18px] text-slate-500 leading-relaxed mb-10">
-              Testa alla funktioner utan kostnad. Uppgradera när du är redo —
-              eller fortsätt gratis. Inga överraskningar.
+              Testa alla funktioner utan kostnad i 60 dagar — inget kreditkort krävs.
+              Uppgradera när du är redo, eller avsluta utan kostnad.
             </p>
 
             <button
               onClick={() => navigate('/signup')}
               className="group inline-flex items-center gap-2 bg-blue-600 hover:bg-primary-dark active:bg-primary-darker text-white font-semibold text-[17px] px-10 py-4 rounded-xl transition-all hover:-translate-y-px"
             >
-              Skapa gratis konto
+              Kom igång gratis
               <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </button>
 
-            <div className="flex items-center justify-center gap-6 mt-8 text-[13px] text-slate-400 font-medium">
+            <p className="mt-3 text-[13px] font-medium" style={{ color: '#666666' }}>
+              ✓ 60 dagar gratis — inget kreditkort krävs
+            </p>
+
+            <div className="flex items-center justify-center gap-6 mt-6 text-[13px] text-slate-400 font-medium">
               <span className="flex items-center gap-1.5">
                 <Check className="w-3.5 h-3.5 text-blue-600" strokeWidth={3} />
-                Gratis att börja
+                Första 60 dagarna gratis
               </span>
               <span className="w-px h-3.5 bg-slate-200" />
               <span className="flex items-center gap-1.5">
