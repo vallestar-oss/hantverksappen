@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import BottomNav from '../components/BottomNav'
-import { Settings, Search, Plus, ChevronRight, Users } from 'lucide-react'
+import Page from '../components/Premium'
+import EmptyState from '../components/EmptyState'
+import { Settings, Search, Plus, ChevronRight } from 'lucide-react'
 import { SkeletonRow } from '../components/Skeleton'
 
 export default function Customers() {
@@ -37,11 +39,12 @@ export default function Customers() {
   }, [customers, query])
 
   return (
-    <div className="min-h-screen flex flex-col pb-20" style={{ background: '#F8F8F8' }}>
+    <Page className="min-h-screen flex flex-col pb-20" >
+      <div className="flex flex-col flex-1" style={{ background: '#F8F8F8' }}>
 
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between sticky top-0 z-10">
-        <h1 className="font-bold text-gray-900 text-lg">Kunder</h1>
+        <h1 className="font-extrabold text-gray-900 text-xl tracking-tight">Kunder</h1>
         <button
           onClick={() => navigate('/settings')}
           className="text-gray-400 hover:text-gray-700 transition-colors p-2 rounded-xl hover:bg-gray-50"
@@ -71,13 +74,13 @@ export default function Customers() {
             {Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}
           </div>
         ) : customers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center mb-4">
-              <Users className="w-8 h-8 text-gray-300" />
-            </div>
-            <p className="text-gray-600 font-semibold text-sm">Du har inga kunder ännu.</p>
-            <p className="text-gray-400 text-sm mt-1">Lägg till din första kund nedan.</p>
-          </div>
+          <EmptyState
+            illustration="customers"
+            title="Du har inga kunder ännu"
+            text="Kunderna du lägger till samlas här, med historik över deras offerter, jobb och fakturor."
+            ctaLabel="Lägg till din första kund"
+            onCta={() => navigate('/customers/new')}
+          />
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <p className="text-gray-400 text-sm">Ingen kund matchade sökningen.</p>
@@ -88,7 +91,7 @@ export default function Customers() {
               <button
                 key={customer.id}
                 onClick={() => navigate(`/customers/${customer.id}`)}
-                className="w-full flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3.5 text-left hover:border-gray-300 transition-all active:bg-gray-50"
+                className="card-lift w-full flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3.5 text-left hover:border-gray-300 active:bg-gray-50"
               >
                 {/* Avatar */}
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -115,13 +118,14 @@ export default function Customers() {
       {/* FAB */}
       <button
         onClick={() => navigate('/customers/new')}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white rounded-full shadow-lg shadow-gray-900/15 flex items-center justify-center transition-all z-10"
+        className="btn-lift fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white rounded-full shadow-lg shadow-gray-900/15 flex items-center justify-center z-10"
         aria-label="Lägg till kund"
       >
         <Plus className="w-6 h-6" />
       </button>
 
       <BottomNav />
-    </div>
+      </div>
+    </Page>
   )
 }

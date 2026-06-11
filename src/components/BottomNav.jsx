@@ -28,9 +28,12 @@ export default function BottomNav() {
             onClick={() => navigate(path)}
             className="flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-colors"
           >
-            {/* Active pill background */}
+            {/* Active pill background + top accent bar */}
             {active && (
-              <span className="absolute inset-x-1.5 top-1.5 bottom-1.5 bg-blue-50 rounded-xl" />
+              <>
+                <span className="absolute inset-x-1.5 top-1.5 bottom-1.5 bg-blue-50 rounded-xl" />
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-primary" />
+              </>
             )}
             <Icon
               className={`w-5 h-5 relative z-10 transition-colors ${active ? 'text-primary' : 'text-gray-400'}`}

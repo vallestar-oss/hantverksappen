@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import Page, { Noise } from '../components/Premium'
 import { ChevronLeft, X, Plus, Loader2 } from 'lucide-react'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -263,7 +264,7 @@ export default function QuoteNew() {
   // ── render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Page className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         <button
@@ -273,7 +274,7 @@ export default function QuoteNew() {
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <h1 className="font-bold text-gray-800 text-lg flex-1">Ny offert</h1>
+        <h1 className="font-bold text-gray-900 text-lg flex-1 tracking-tight">Ny offert</h1>
         <button
           type="button"
           onClick={() => handleSave('utkast')}
@@ -284,7 +285,7 @@ export default function QuoteNew() {
         </button>
       </header>
 
-      <div className="max-w-lg mx-auto px-4 py-5 space-y-4 pb-20">
+      <div className="max-w-lg mx-auto px-4 py-5 space-y-4 pb-28">
 
         {/* ── Kund ── */}
         <Card title="Kund">
@@ -406,7 +407,7 @@ export default function QuoteNew() {
           <button
             type="button"
             onClick={addRow}
-            className="w-full flex items-center justify-center gap-1.5 border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm font-medium text-gray-600 hover:border-primary hover:text-primary transition-colors duration-200"
+            className="btn-lift w-full flex items-center justify-center gap-1.5 border-2 border-dashed border-gray-300 rounded-xl py-3 text-sm font-medium text-gray-600 hover:border-primary hover:text-primary"
           >
             <Plus className="w-4 h-4" />
             Lägg till rad
@@ -436,12 +437,16 @@ export default function QuoteNew() {
               <SummaryRow label="Totalt ink. moms" value={formatSEK(calc.totalInkMoms)} />
             </div>
 
-            <div className="border-t-2 border-gray-200 pt-3 mt-1">
-              <div className="flex justify-between items-baseline">
-                <span className="font-bold text-gray-800 text-base">
+            {/* Total — the hero of the quote, on a dark surface */}
+            <div className="relative overflow-hidden rounded-xl mt-3 -mx-1" style={{ background: '#111111' }}>
+              <Noise />
+              <div className="relative px-4 py-4 flex justify-between items-center gap-3">
+                <span className="font-semibold text-white text-sm">
                   {rotRut ? 'Att betala efter ROT/RUT' : 'Att betala'}
                 </span>
-                <span className="font-bold text-primary text-xl">{formatSEK(calc.toPay)}</span>
+                <span className="font-extrabold text-white text-2xl tabular-nums" style={{ letterSpacing: '-0.02em' }}>
+                  {formatSEK(calc.toPay)}
+                </span>
               </div>
             </div>
           </div>
@@ -450,14 +455,15 @@ export default function QuoteNew() {
         {error && <p className="text-sm text-danger px-1">{error}</p>}
       </div>
 
-      {/* Sticky total + save — the sum is always visible while building */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-20">
-        <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
+      {/* Sticky total + save — the sum is the hero, always visible while building */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 overflow-hidden" style={{ background: '#111111' }}>
+        <Noise />
+        <div className="relative max-w-lg mx-auto px-4 py-3.5 flex items-center gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-gray-600 leading-tight">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-300 leading-tight">
               {rotRut ? 'Att betala efter ROT/RUT' : 'Att betala'}
             </p>
-            <p className="text-lg font-bold text-gray-900 tabular-nums leading-tight">
+            <p className="text-[1.75rem] font-extrabold text-white tabular-nums leading-tight" style={{ letterSpacing: '-0.02em' }}>
               {formatSEK(calc.toPay)}
             </p>
           </div>
@@ -465,14 +471,14 @@ export default function QuoteNew() {
             type="button"
             onClick={() => handleSave('utkast')}
             disabled={saving}
-            className="flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark active:bg-primary-darker disabled:opacity-60 text-white font-semibold h-11 px-6 rounded-xl transition-all duration-200"
+            className="btn-lift flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark active:bg-primary-darker disabled:opacity-60 text-white font-semibold h-11 px-6 rounded-xl"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             {saving ? 'Sparar…' : 'Spara offert'}
           </button>
         </div>
       </div>
-    </div>
+    </Page>
   )
 }
 

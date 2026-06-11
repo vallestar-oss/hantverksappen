@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import BottomNav from '../components/BottomNav'
-import { FileText, Plus } from 'lucide-react'
+import Page from '../components/Premium'
+import EmptyState from '../components/EmptyState'
+import { FileText, Plus, Check } from 'lucide-react'
 import { SkeletonListRow } from '../components/Skeleton'
 
 const STATUSES = [
@@ -17,7 +19,7 @@ const STATUSES = [
 const BADGE = {
   utkast:  'bg-gray-100 text-gray-600',
   skickad: 'bg-blue-100 text-blue-700',
-  godkänd: 'bg-green-100 text-green-700',
+  godkänd: 'bg-green-100 text-green-700 glow-success',
   avvisad: 'bg-red-100 text-red-700',
 }
 
@@ -74,12 +76,13 @@ export default function Quotes() {
   }, [quotes, activeFilter])
 
   return (
-    <div className="min-h-screen flex flex-col pb-20" style={{ background: '#F8F8F8' }}>
+    <Page className="min-h-screen flex flex-col pb-20" >
+      <div className="flex flex-col flex-1" style={{ background: '#F8F8F8' }}>
 
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 pt-4 pb-0 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-3">
-          <h1 className="font-bold text-gray-900 text-lg">Offerter</h1>
+          <h1 className="font-extrabold text-gray-900 text-xl tracking-tight">Offerter</h1>
         </div>
 
         {/* Filter pills */}
@@ -106,13 +109,13 @@ export default function Quotes() {
             {Array.from({ length: 5 }).map((_, i) => <SkeletonListRow key={i} />)}
           </div>
         ) : quotes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center mb-4">
-              <FileText className="w-8 h-8 text-gray-300" />
-            </div>
-            <p className="text-gray-600 font-semibold text-sm">Du har inga offerter ännu.</p>
-            <p className="text-gray-400 text-sm mt-1">Skapa din första offert nedan.</p>
-          </div>
+          <EmptyState
+            illustration="quotes"
+            title="Du har inga offerter ännu"
+            text="Skapa en professionell offert med ROT/RUT-avdrag på några minuter."
+            ctaLabel="Skapa din första offert"
+            onCta={() => navigate('/quotes/new')}
+          />
         ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center py-20">
             <p className="text-gray-400 text-sm">Inga offerter med vald status.</p>
@@ -126,7 +129,7 @@ export default function Quotes() {
                 <button
                   key={quote.id}
                   onClick={() => navigate(`/quotes/${quote.id}`)}
-                  className="w-full flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3.5 text-left hover:border-gray-300 transition-all active:bg-gray-50"
+                  className="card-lift w-full flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3.5 text-left hover:border-gray-300 active:bg-gray-50"
                 >
                   {/* Icon */}
                   <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
@@ -146,7 +149,8 @@ export default function Quotes() {
                   {/* Amount + badge */}
                   <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                     <span className="text-sm font-bold text-gray-800 tabular-nums">{formatSEK(total)}</span>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${BADGE[status] ?? BADGE.utkast}`}>
+                    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${BADGE[status] ?? BADGE.utkast}`}>
+                      {status === 'godkänd' && <Check className="w-3 h-3" strokeWidth={3} />}
                       {STATUS_LABEL[status] ?? status}
                     </span>
                   </div>
@@ -160,13 +164,14 @@ export default function Quotes() {
       {/* FAB */}
       <button
         onClick={() => navigate('/quotes/new')}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white rounded-full shadow-lg shadow-gray-900/15 flex items-center justify-center transition-all z-10"
+        className="btn-lift fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white rounded-full shadow-lg shadow-gray-900/15 flex items-center justify-center z-10"
         aria-label="Ny offert"
       >
         <Plus className="w-6 h-6" />
       </button>
 
       <BottomNav />
-    </div>
+      </div>
+    </Page>
   )
 }

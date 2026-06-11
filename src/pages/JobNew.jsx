@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { ChevronLeft, Info, AlertCircle } from 'lucide-react'
+import { Fx } from '../components/Premium'
 
 function todayISO() { return new Date().toISOString().slice(0, 10) }
 
@@ -63,7 +64,8 @@ export default function JobNew() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: '#F8F8F8' }}>
+    <div className="page-fade min-h-screen" style={{ background: '#F8F8F8' }}>
+      <Fx />
       <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         <button onClick={() => navigate('/jobs')} className="text-gray-500 hover:text-gray-800 transition-colors p-1.5 -ml-1 rounded-xl hover:bg-gray-100" aria-label="Tillbaka">
           <ChevronLeft className="w-5 h-5" />

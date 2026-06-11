@@ -5,9 +5,10 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { generateInvoicePDF } from '../utils/generateInvoicePDF'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
+import Page, { Noise } from '../components/Premium'
 import {
   ChevronLeft, Pencil, AlertTriangle, Check, Phone, Mail,
-  Download, Bell, X, Trash2,
+  Download, Bell, X, Trash2, Loader2,
 } from 'lucide-react'
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -183,22 +184,78 @@ export default function InvoiceDetail() {
   return (
     <>
       {confirmDialog}
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <Page className="min-h-screen bg-gray-50 pb-20">
 
-      {/* ── Header ── */}
-      <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
+      {/* ── Dark header — the document moment ── */}
+      <header className="px-4 py-4 flex items-center gap-3 sticky top-0 z-10 overflow-hidden" style={{ background: '#111111' }}>
+        <Noise />
         <button onClick={() => navigate('/invoices')}
-          className="text-gray-500 hover:text-gray-800 transition-colors p-1 -ml-1 rounded-lg" aria-label="Tillbaka">
+          className="relative text-gray-400 hover:text-white transition-colors p-1 -ml-1 rounded-lg" aria-label="Tillbaka">
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <h1 className="font-bold text-gray-800 text-lg flex-1 truncate">
+        <h1 className="relative font-bold text-white text-lg flex-1 truncate tracking-tight">
           Faktura {invoice.invoice_number ?? '–'}
         </h1>
         <button onClick={() => navigate(`/invoices/${id}/edit`)}
-          className="text-gray-400 hover:text-gray-700 transition-colors p-1 rounded-lg" aria-label="Redigera">
+          className="relative text-gray-400 hover:text-white transition-colors p-1 rounded-lg" aria-label="Redigera">
           <Pencil className="w-5 h-5" />
         </button>
       </header>
+
+      {/* ── Dark hero — amount is the largest element on the screen ── */}
+      <section className="relative overflow-hidden" style={{ background: '#111111' }}>
+        <Noise />
+        {/* status-tinted glow */}
+        <div
+          aria-hidden="true"
+          className="absolute pointer-events-none"
+          style={{
+            top: '-120px', right: '-80px', width: '300px', height: '300px',
+            background: `radial-gradient(circle, ${
+              isPaid ? 'rgba(22,163,74,0.30)' : isOverdue ? 'rgba(220,38,38,0.30)' : 'rgba(0,85,255,0.28)'
+            } 0%, transparent 70%)`,
+          }}
+        />
+        <div className="relative max-w-lg mx-auto px-4 pt-5 pb-7">
+          <div className="flex items-center justify-between gap-3">
+            <p className={`text-xs font-semibold uppercase tracking-wide ${
+              isPaid ? 'text-green-400' : isOverdue ? 'text-red-300' : 'text-blue-300'
+            }`}>
+              {isPaid ? 'Betald' : 'Att betala'}
+            </p>
+            {isPaid ? (
+              <span className="check-pop inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700 glow-success">
+                <Check className="w-3 h-3" strokeWidth={3} />
+                Betald
+              </span>
+            ) : (
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                isOverdue ? 'bg-red-100 text-red-700 glow-danger' : 'bg-amber-100 text-amber-700'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                {cfg.label}
+              </span>
+            )}
+          </div>
+
+          <p className="text-[2.5rem] font-extrabold text-white tabular-nums leading-tight mt-1" style={{ letterSpacing: '-0.02em' }}>
+            {formatSEK(totals.toPay)}
+          </p>
+
+          {isPaid && invoice.paid_date && (
+            <p className="text-sm text-gray-400 mt-1">Betalades {formatDate(invoice.paid_date)}</p>
+          )}
+          {!isPaid && !isOverdue && invoice.due_date && (
+            <p className="text-sm text-gray-400 mt-1">Förfaller {formatDate(invoice.due_date)}</p>
+          )}
+          {isOverdue && (
+            <p className="text-sm text-red-300 mt-1 font-medium flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              Förföll {formatDate(invoice.due_date)} — försenad med {overdueDays} {overdueDays === 1 ? 'dag' : 'dagar'}
+            </p>
+          )}
+        </div>
+      </section>
 
       {/* Saved banner */}
       {savedBanner && (
@@ -211,69 +268,12 @@ export default function InvoiceDetail() {
         </div>
       )}
 
-      {/* ── Overdue banner (above status bar when overdue) ── */}
-      {isOverdue && (
-        <div className="bg-red-600 px-5 py-2.5 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-white flex-shrink-0" />
-          <div>
-            <span className="text-white font-bold text-sm">FÖRSENAD</span>
-            <span className="text-red-200 text-sm ml-2">
-              Försenad med {overdueDays} {overdueDays === 1 ? 'dag' : 'dagar'}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* ── Status banner ── */}
-      <div className={`${cfg.bg} ${cfg.text} border-b ${cfg.border} px-5 py-3 flex items-center gap-2`}>
-        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
-        <span className="font-semibold text-sm">{cfg.label}</span>
-        {isPaid && invoice.paid_date && (
-          <span className="ml-auto text-xs font-medium opacity-75">
-            {formatDate(invoice.paid_date)}
-          </span>
-        )}
-      </div>
-
       <div className="max-w-lg mx-auto px-4 py-5 space-y-4">
-
-        {/* ── Outstanding / Paid amount hero ── */}
-        {!isPaid ? (
-          <div className={`rounded-xl px-5 py-4 border ${isOverdue ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'}`}>
-            <p className={`text-xs font-semibold uppercase tracking-wide mb-1 ${isOverdue ? 'text-danger' : 'text-warning'}`}>
-              Att betala
-            </p>
-            <p className={`text-3xl font-bold tabular-nums ${isOverdue ? 'text-danger' : 'text-warning'}`}>
-              {formatSEK(totals.toPay)}
-            </p>
-            {invoice.due_date && !isOverdue && (
-              <p className="text-xs text-gray-500 mt-1">Förfaller {formatDate(invoice.due_date)}</p>
-            )}
-            {isOverdue && (
-              <p className="text-xs text-danger mt-1 font-medium">
-                Förföll {formatDate(invoice.due_date)}
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="rounded-xl px-5 py-4 bg-green-50 border border-green-100 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
-              <Check className="w-5 h-5 text-success" strokeWidth={2.5} />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-success uppercase tracking-wide">Betald</p>
-              <p className="text-sm font-bold text-gray-800 tabular-nums">{formatSEK(totals.toPay)}</p>
-              {invoice.paid_date && (
-                <p className="text-xs text-gray-500 mt-0.5">{formatDate(invoice.paid_date)}</p>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* ── Markera som betald — only when unpaid ── */}
         {!isPaid && (
           <button onClick={handleMarkPaid} disabled={paying}
-            className="w-full flex items-center justify-center gap-2 bg-success hover:bg-green-700 active:bg-green-800 disabled:opacity-60 text-white font-bold py-4 rounded-xl transition-colors text-base">
+            className="btn-lift w-full flex items-center justify-center gap-2 bg-success hover:bg-green-700 active:bg-green-800 disabled:opacity-60 text-white font-bold py-4 rounded-xl text-base">
             <Check className="w-5 h-5" strokeWidth={2.5} />
             {paying ? 'Uppdaterar…' : 'Markera som betald'}
           </button>
@@ -428,12 +428,14 @@ export default function InvoiceDetail() {
               <SummaryRow label="Totalt ink. moms" value={formatSEK(totals.totalInkMoms)} />
             </div>
 
-            <div className="border-t-2 border-gray-200 pt-3">
-              <div className="flex justify-between items-baseline">
-                <span className="font-bold text-gray-800 text-base">
+            {/* Total — distinct dark surface, document-grade */}
+            <div className="relative overflow-hidden rounded-xl mt-3 -mx-1" style={{ background: '#111111' }}>
+              <Noise />
+              <div className="relative px-4 py-4 flex justify-between items-center gap-3">
+                <span className="font-semibold text-white text-sm">
                   {invoice.rot_rut_enabled ? 'Att betala efter ROT/RUT' : 'Att betala'}
                 </span>
-                <span className={`font-bold text-xl tabular-nums ${isPaid ? 'text-success' : isOverdue ? 'text-danger' : 'text-primary'}`}>
+                <span className={`font-extrabold text-2xl tabular-nums ${isPaid ? 'text-green-400' : 'text-white'}`} style={{ letterSpacing: '-0.02em' }}>
                   {formatSEK(totals.toPay)}
                 </span>
               </div>
@@ -445,7 +447,7 @@ export default function InvoiceDetail() {
 
         {/* ── Ladda ner PDF ── */}
         <button onClick={handleDownloadPDF} disabled={pdfLoading}
-          className="w-full flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-60 text-gray-700 font-semibold py-3 rounded-xl transition-colors">
+          className="btn-lift w-full flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-60 text-gray-700 font-semibold py-3 rounded-xl">
           {pdfLoading ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -463,7 +465,7 @@ export default function InvoiceDetail() {
         {!isPaid && invoice.customers?.email && (
           <a
             href={`mailto:${invoice.customers.email}?subject=${encodeURIComponent(`Påminnelse: Faktura ${invoice.invoice_number ?? ''}`)}&body=${encodeURIComponent(`Hej ${invoice.customers.name ?? ''},\n\nDetta är en vänlig påminnelse om faktura ${invoice.invoice_number ?? ''} på ${formatSEK(totals.toPay)}${invoice.due_date ? ` med förfallodatum ${formatDate(invoice.due_date)}` : ''}.\n\nMed vänliga hälsningar`)}`}
-            className="w-full flex items-center justify-center gap-2 bg-white border border-amber-300 hover:bg-amber-50 active:bg-amber-100 text-warning font-semibold py-3 rounded-xl transition-colors duration-200">
+            className="btn-lift w-full flex items-center justify-center gap-2 bg-white border border-amber-300 hover:bg-amber-50 active:bg-amber-100 text-warning font-semibold py-3 rounded-xl">
             <Bell className="w-4 h-4" />
             Skicka påminnelse
           </a>
@@ -473,13 +475,13 @@ export default function InvoiceDetail() {
         <button
           onClick={handleDelete}
           disabled={deleting || paying}
-          className="w-full flex items-center justify-center gap-2 bg-white border border-red-200 hover:bg-red-50 active:bg-red-100 disabled:opacity-60 text-red-600 font-semibold h-12 rounded-xl transition-all"
+          className="btn-lift w-full flex items-center justify-center gap-2 bg-white border border-red-200 hover:bg-red-50 active:bg-red-100 disabled:opacity-60 text-red-600 font-semibold h-12 rounded-xl"
         >
           <Trash2 className="w-4 h-4" />
           {deleting ? 'Raderar…' : 'Radera faktura'}
         </button>
       </div>
-    </div>
+    </Page>
     </>
   )
 }

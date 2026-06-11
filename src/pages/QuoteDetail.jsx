@@ -5,9 +5,10 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { generateQuotePDF } from '../utils/generateQuotePDF'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
+import Page, { Noise } from '../components/Premium'
 import {
   ChevronLeft, Pencil, PencilLine, Send, CheckCircle, XCircle, X,
-  Phone, Mail, MapPin, Download, Briefcase, Trash2,
+  Phone, Mail, MapPin, Download, Briefcase, Trash2, Loader2, Check,
 } from 'lucide-react'
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -198,34 +199,82 @@ export default function QuoteDetail() {
 
   const status = quote.status ?? 'utkast'
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.utkast
-  const StatusIcon = cfg.icon
   const items = quote.quote_items ?? []
   const customer = quote.customers
 
   return (
     <>
       {confirmDialog}
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
+    <Page className="min-h-screen bg-gray-50 pb-20">
+      {/* ── Dark header — the document moment ── */}
+      <header className="px-4 py-4 flex items-center gap-3 sticky top-0 z-10 overflow-hidden" style={{ background: '#111111' }}>
+        <Noise />
         <button
           onClick={() => navigate('/quotes')}
-          className="text-gray-500 hover:text-gray-800 transition-colors p-1 -ml-1 rounded-lg"
+          className="relative text-gray-400 hover:text-white transition-colors p-1 -ml-1 rounded-lg"
           aria-label="Tillbaka"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <h1 className="font-bold text-gray-800 text-lg flex-1 truncate">
+        <h1 className="relative font-bold text-white text-lg flex-1 truncate tracking-tight">
           Offert {quote.quote_number}
         </h1>
         <button
           onClick={() => navigate(`/quotes/${id}/edit`)}
-          className="text-gray-400 hover:text-gray-700 transition-colors p-1 rounded-lg"
+          className="relative text-gray-400 hover:text-white transition-colors p-1 rounded-lg"
           aria-label="Redigera offert"
         >
           <Pencil className="w-5 h-5" />
         </button>
       </header>
+
+      {/* ── Dark hero — the quoted amount is the hero ── */}
+      <section className="relative overflow-hidden" style={{ background: '#111111' }}>
+        <Noise />
+        <div
+          aria-hidden="true"
+          className="absolute pointer-events-none"
+          style={{
+            top: '-120px', right: '-80px', width: '300px', height: '300px',
+            background: `radial-gradient(circle, ${
+              status === 'godkänd' ? 'rgba(22,163,74,0.30)'
+              : status === 'avvisad' ? 'rgba(220,38,38,0.25)'
+              : 'rgba(0,85,255,0.28)'
+            } 0%, transparent 70%)`,
+          }}
+        />
+        <div className="relative max-w-lg mx-auto px-4 pt-5 pb-7">
+          <div className="flex items-center justify-between gap-3">
+            <p className={`text-xs font-semibold uppercase tracking-wide ${
+              status === 'godkänd' ? 'text-green-400' : status === 'avvisad' ? 'text-red-300' : 'text-blue-300'
+            }`}>
+              {quote.rot_rut_enabled ? 'Att betala efter ROT/RUT' : 'Att betala'}
+            </p>
+            {status === 'godkänd' ? (
+              <span className="check-pop inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700 glow-success">
+                <Check className="w-3 h-3" strokeWidth={3} />
+                Godkänd
+              </span>
+            ) : (
+              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                status === 'avvisad' ? 'bg-red-100 text-red-700'
+                : status === 'skickad' ? 'bg-blue-100 text-blue-700'
+                : 'bg-gray-100 text-gray-600'
+              }`}>
+                {cfg.label}
+              </span>
+            )}
+          </div>
+
+          <p className="text-[2.5rem] font-extrabold text-white tabular-nums leading-tight mt-1" style={{ letterSpacing: '-0.02em' }}>
+            {formatSEK(calc.toPay)}
+          </p>
+
+          {quote.valid_until && (
+            <p className="text-sm text-gray-400 mt-1">Giltig till {formatDate(quote.valid_until)}</p>
+          )}
+        </div>
+      </section>
 
       {/* Saved banner */}
       {savedBanner && (
@@ -237,12 +286,6 @@ export default function QuoteDetail() {
           </button>
         </div>
       )}
-
-      {/* Status banner */}
-      <div className={`${cfg.bg} ${cfg.text} border-b ${cfg.border} px-5 py-3 flex items-center gap-2`}>
-        <StatusIcon />
-        <span className="font-semibold text-sm">{cfg.label}</span>
-      </div>
 
       <div className="max-w-lg mx-auto px-4 py-5 space-y-4">
 
@@ -359,12 +402,16 @@ export default function QuoteDetail() {
             <SummaryRow label="Totalt ink. moms" value={formatSEK(calc.totalInkMoms)} />
           </div>
 
-          <div className="border-t-2 border-gray-200 pt-3 mt-1">
-            <div className="flex justify-between items-baseline">
-              <span className="font-bold text-gray-800">
+          {/* Total — distinct dark surface */}
+          <div className="relative overflow-hidden rounded-xl mt-3 -mx-1" style={{ background: '#111111' }}>
+            <Noise />
+            <div className="relative px-4 py-4 flex justify-between items-center gap-3">
+              <span className="font-semibold text-white text-sm">
                 {quote.rot_rut_enabled ? 'Att betala efter ROT/RUT' : 'Att betala'}
               </span>
-              <span className="font-bold text-primary text-xl tabular-nums">{formatSEK(calc.toPay)}</span>
+              <span className="font-extrabold text-white text-2xl tabular-nums" style={{ letterSpacing: '-0.02em' }}>
+                {formatSEK(calc.toPay)}
+              </span>
             </div>
           </div>
         </Card>
@@ -373,7 +420,7 @@ export default function QuoteDetail() {
         <button
           onClick={handleDownloadPDF}
           disabled={pdfLoading}
-          className="w-full flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 font-semibold py-3 rounded-xl transition-colors duration-150 disabled:opacity-60"
+          className="btn-lift w-full flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 font-semibold py-3 rounded-xl disabled:opacity-60"
         >
           {pdfLoading ? (
             <>
@@ -397,13 +444,13 @@ export default function QuoteDetail() {
         <button
           onClick={handleDelete}
           disabled={deleting || updating}
-          className="w-full flex items-center justify-center gap-2 bg-white border border-red-200 hover:bg-red-50 active:bg-red-100 disabled:opacity-60 text-red-600 font-semibold h-12 rounded-xl transition-all"
+          className="btn-lift w-full flex items-center justify-center gap-2 bg-white border border-red-200 hover:bg-red-50 active:bg-red-100 disabled:opacity-60 text-red-600 font-semibold h-12 rounded-xl"
         >
           <Trash2 className="w-4 h-4" />
           {deleting ? 'Raderar…' : 'Radera offert'}
         </button>
       </div>
-    </div>
+    </Page>
     </>
   )
 }
@@ -488,7 +535,7 @@ function ActionBtn({ label, icon, className, onClick, disabled }) {
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`w-full flex items-center justify-center gap-2 font-semibold py-3 rounded-xl transition-colors duration-150 disabled:opacity-60 ${className}`}
+      className={`btn-lift w-full flex items-center justify-center gap-2 font-semibold py-3 rounded-xl disabled:opacity-60 ${className}`}
     >
       {icon}
       {label}

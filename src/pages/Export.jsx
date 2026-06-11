@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { buildFortnoxCSV, downloadCSV } from '../utils/exportFortnox'
 import { ChevronLeft, BarChart3, Download, CheckCircle, Loader2 } from 'lucide-react'
+import { Fx } from '../components/Premium'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -86,7 +87,8 @@ export default function Export() {
   // ── render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="page-fade min-h-screen bg-gray-50">
+      <Fx />
 
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">

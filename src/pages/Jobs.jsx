@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import BottomNav from '../components/BottomNav'
-import { Calendar, Plus, Briefcase, ChevronRight } from 'lucide-react'
+import Page from '../components/Premium'
+import EmptyState from '../components/EmptyState'
+import { Calendar, Plus } from 'lucide-react'
 import { SkeletonRow } from '../components/Skeleton'
 
 const STATUSES = [
@@ -62,12 +64,13 @@ export default function Jobs() {
   }, [jobs, activeFilter])
 
   return (
-    <div className="min-h-screen flex flex-col pb-20" style={{ background: '#F8F8F8' }}>
+    <Page className="min-h-screen flex flex-col pb-20" >
+      <div className="flex flex-col flex-1" style={{ background: '#F8F8F8' }}>
 
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 pt-4 pb-0 sticky top-0 z-10">
         <div className="flex items-center justify-between mb-3">
-          <h1 className="font-bold text-gray-900 text-lg">Jobb</h1>
+          <h1 className="font-extrabold text-gray-900 text-xl tracking-tight">Jobb</h1>
           <button
             onClick={() => navigate('/jobs/calendar')}
             className="text-gray-400 hover:text-gray-700 transition-colors p-2 rounded-xl hover:bg-gray-50"
@@ -101,13 +104,13 @@ export default function Jobs() {
             {Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}
           </div>
         ) : jobs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-16 h-16 rounded-xl bg-blue-50 flex items-center justify-center mb-4">
-              <Briefcase className="w-8 h-8 text-primary/40" />
-            </div>
-            <p className="text-gray-600 font-semibold text-sm">Du har inga jobb ännu.</p>
-            <p className="text-gray-400 text-sm mt-1">Skapa ditt första jobb nedan.</p>
-          </div>
+          <EmptyState
+            illustration="jobs"
+            title="Du har inga jobb ännu"
+            text="Planera, följ och avsluta dina jobb — från första kontakt till skickad faktura."
+            ctaLabel="Skapa ditt första jobb"
+            onCta={() => navigate('/jobs/new')}
+          />
         ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center py-20">
             <p className="text-gray-400 text-sm">Inga jobb med vald status.</p>
@@ -120,7 +123,7 @@ export default function Jobs() {
                 <button
                   key={job.id}
                   onClick={() => navigate(`/jobs/${job.id}`)}
-                  className="w-full flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3.5 text-left hover:border-gray-300 transition-all active:bg-gray-50"
+                  className="card-lift w-full flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3.5 text-left hover:border-gray-300 active:bg-gray-50"
                 >
                   {/* Status dot */}
                   <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5 ${STATUS_DOT[status] ?? STATUS_DOT.planerad}`} />
@@ -154,13 +157,14 @@ export default function Jobs() {
       {/* FAB */}
       <button
         onClick={() => navigate('/jobs/new')}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white rounded-full shadow-lg shadow-gray-900/15 flex items-center justify-center transition-all z-10"
+        className="btn-lift fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white rounded-full shadow-lg shadow-gray-900/15 flex items-center justify-center z-10"
         aria-label="Nytt jobb"
       >
         <Plus className="w-6 h-6" />
       </button>
 
       <BottomNav />
-    </div>
+      </div>
+    </Page>
   )
 }

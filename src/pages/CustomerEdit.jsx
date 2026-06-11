@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { ChevronLeft, AlertCircle, Loader2, Trash2 } from 'lucide-react'
 import { SkeletonPage } from '../components/Skeleton'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
+import { Fx } from '../components/Premium'
 
 export default function CustomerEdit() {
   const { id } = useParams()
@@ -69,7 +70,8 @@ export default function CustomerEdit() {
   return (
     <>
       {confirmDialog}
-      <div className="min-h-screen" style={{ background: '#F8F8F8' }}>
+      <div className="page-fade min-h-screen" style={{ background: '#F8F8F8' }}>
+      <Fx />
       <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         <button onClick={() => navigate(`/customers/${id}`)} className="text-gray-500 hover:text-gray-800 transition-colors p-1.5 -ml-1 rounded-xl hover:bg-gray-100" aria-label="Tillbaka">
           <ChevronLeft className="w-5 h-5" />

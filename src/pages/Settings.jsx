@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { ChevronLeft, ChevronRight, BarChart3, CheckCircle, AlertCircle, ImagePlus } from 'lucide-react'
+import { Fx } from '../components/Premium'
 
 const EMPTY_FORM = {
   company_name: '', org_number: '', f_skatt: false, address: '', postal_code: '',
@@ -82,7 +83,8 @@ export default function Settings() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: '#F8F8F8' }}>
+    <div className="page-fade min-h-screen" style={{ background: '#F8F8F8' }}>
+      <Fx />
       <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         <button onClick={() => navigate('/dashboard')} className="text-gray-500 hover:text-gray-800 transition-colors p-1.5 -ml-1 rounded-xl hover:bg-gray-100" aria-label="Tillbaka">
           <ChevronLeft className="w-5 h-5" />

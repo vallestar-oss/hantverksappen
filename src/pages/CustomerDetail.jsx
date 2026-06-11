@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { ChevronLeft, Pencil, Phone, Mail, MapPin, StickyNote, Briefcase, ChevronRight, Plus, FileText, Receipt, Trash2 } from 'lucide-react'
 import { SkeletonPage } from '../components/Skeleton'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
+import { Fx } from '../components/Premium'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -190,7 +191,8 @@ export default function CustomerDetail() {
   return (
     <>
       {confirmDialog}
-    <div className="min-h-screen pb-20" style={{ background: '#F8F8F8' }}>
+    <div className="page-fade min-h-screen pb-20" style={{ background: '#F8F8F8' }}>
+      <Fx />
 
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { ChevronLeft, Pencil, Play, CheckCircle, Receipt, Trash2, Loader2, User, CalendarDays, FileText, StickyNote, Link2 } from 'lucide-react'
 import { SkeletonPage } from '../components/Skeleton'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
+import Page from '../components/Premium'
 
 const STATUS_CONFIG = {
   planerad: { label: 'Planerad', bg: 'bg-blue-50',  text: 'text-blue-700',  border: 'border-blue-100',  dot: 'bg-blue-400',  badge: 'bg-blue-100 text-blue-700' },
@@ -82,14 +83,14 @@ export default function JobDetail() {
   return (
     <>
       {confirmDialog}
-      <div className="min-h-screen pb-20" style={{ background: '#F8F8F8' }}>
+      <Page className="min-h-screen pb-20" style={{ background: '#F8F8F8' }}>
 
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         <button onClick={() => navigate('/jobs')} className="text-gray-500 hover:text-gray-800 transition-colors p-1.5 -ml-1 rounded-xl hover:bg-gray-100" aria-label="Tillbaka">
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <h1 className="font-bold text-gray-900 text-lg flex-1 truncate">{job.title}</h1>
+        <h1 className="font-bold text-gray-900 text-lg flex-1 truncate tracking-tight">{job.title}</h1>
         <button onClick={() => navigate(`/jobs/${id}/edit`)} className="text-gray-400 hover:text-gray-700 transition-colors p-1.5 rounded-xl hover:bg-gray-100" aria-label="Redigera">
           <Pencil className="w-5 h-5" />
         </button>
@@ -162,7 +163,7 @@ export default function JobDetail() {
           <button
             onClick={() => updateStatus('pågående')}
             disabled={updating}
-            className="w-full flex items-center justify-center gap-2 bg-warning hover:bg-amber-700 active:bg-amber-800 disabled:opacity-60 text-white font-semibold h-12 rounded-xl transition-all"
+            className="btn-lift w-full flex items-center justify-center gap-2 bg-warning hover:bg-amber-700 active:bg-amber-800 disabled:opacity-60 text-white font-semibold h-12 rounded-xl"
           >
             <Play className="w-5 h-5" />
             {updating ? 'Uppdaterar…' : 'Starta jobb'}
@@ -173,7 +174,7 @@ export default function JobDetail() {
           <button
             onClick={() => updateStatus('avslutad')}
             disabled={updating}
-            className="w-full flex items-center justify-center gap-2 bg-success hover:bg-green-700 active:bg-green-800 disabled:opacity-60 text-white font-semibold h-12 rounded-xl transition-all"
+            className="btn-lift w-full flex items-center justify-center gap-2 bg-success hover:bg-green-700 active:bg-green-800 disabled:opacity-60 text-white font-semibold h-12 rounded-xl"
           >
             <CheckCircle className="w-5 h-5" />
             {updating ? 'Uppdaterar…' : 'Slutför jobb'}
@@ -189,7 +190,7 @@ export default function JobDetail() {
             <button
               onClick={() => navigate(`/invoices/new?job_id=${id}`)}
               disabled={updating}
-              className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark active:bg-primary-darker disabled:opacity-60 text-white font-bold h-12 rounded-xl transition-all"
+              className="btn-lift w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark active:bg-primary-darker disabled:opacity-60 text-white font-bold h-12 rounded-xl"
             >
               <Receipt className="w-5 h-5" />
               Skapa faktura
@@ -201,13 +202,13 @@ export default function JobDetail() {
         <button
           onClick={handleDelete}
           disabled={deleting || updating}
-          className="w-full flex items-center justify-center gap-2 bg-white border border-danger/25 hover:bg-red-50 active:bg-red-100 disabled:opacity-60 text-danger font-semibold h-12 rounded-xl transition-all"
+          className="btn-lift w-full flex items-center justify-center gap-2 bg-white border border-danger/25 hover:bg-red-50 active:bg-red-100 disabled:opacity-60 text-danger font-semibold h-12 rounded-xl"
         >
           <Trash2 className="w-4 h-4" />
           {deleting ? 'Raderar…' : 'Radera jobb'}
         </button>
       </div>
-    </div>
+    </Page>
     </>
   )
 }
