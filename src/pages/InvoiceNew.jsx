@@ -3,7 +3,16 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Page, { Noise } from '../components/Premium'
+import { useToast } from '../components/Toast'
 import { ChevronLeft, X, Plus, Info, Loader2 } from 'lucide-react'
+
+const ROW_CSS = `
+@keyframes row-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.row-enter { animation: row-enter 200ms ease both; }
+`
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -29,7 +38,7 @@ function LineItem({ row, onChange, onRemove }) {
   const set = (field, value) => onChange({ ...row, [field]: value })
 
   return (
-    <div className="border border-gray-200 rounded-xl p-4 space-y-3 bg-gray-50/50">
+    <div className="row-enter border border-gray-200 rounded-xl p-4 space-y-3 bg-gray-50/50">
       <div className="flex gap-2">
         <input
           type="text" value={row.description} onChange={e => set('description', e.target.value)}
@@ -79,6 +88,7 @@ function LineItem({ row, onChange, onRemove }) {
 export default function InvoiceNew() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const showToast = useToast()
   const [searchParams] = useSearchParams()
   const jobIdParam = searchParams.get('job_id')
 
@@ -219,6 +229,7 @@ export default function InvoiceNew() {
       }
     }
 
+    showToast('Fakturan skapades', 'success')
     navigate(`/invoices/${invoice.id}`)
   }
 
@@ -226,6 +237,7 @@ export default function InvoiceNew() {
 
   return (
     <Page className="min-h-screen bg-gray-50">
+      <style>{ROW_CSS}</style>
       <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         <button onClick={() => navigate('/invoices')}
           className="text-gray-500 hover:text-gray-800 transition-colors p-1 -ml-1 rounded-lg" aria-label="Tillbaka">

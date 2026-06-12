@@ -6,8 +6,10 @@ import { useAuth } from '../context/AuthContext'
 import { generateQuotePDF } from '../utils/generateQuotePDF'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
 import Page, { Noise } from '../components/Premium'
+import ActivityLog from '../components/ActivityLog'
+import { useToast } from '../components/Toast'
 import {
-  ChevronLeft, Pencil, PencilLine, Send, CheckCircle, XCircle, X,
+  ChevronLeft, Pencil, PencilLine, Send, CheckCircle, XCircle,
   Phone, Mail, MapPin, Download, Briefcase, Trash2, Loader2, Check,
 } from 'lucide-react'
 
@@ -78,7 +80,7 @@ export default function QuoteDetail() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [savedBanner, setSavedBanner] = useState(location.state?.saved === true)
+  const showToast = useToast()
 
   const [quote, setQuote] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -106,6 +108,15 @@ export default function QuoteDetail() {
     }
     load()
   }, [id, user.id, navigate])
+
+  // Saved from edit/create flow — show as toast, then clear the state
+  useEffect(() => {
+    if (location.state?.saved === true) {
+      showToast('Offerten sparades', 'success')
+      window.history.replaceState({}, '')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const calc = useMemo(() => {
     if (!quote) return {}
@@ -142,9 +153,12 @@ export default function QuoteDetail() {
 
     if (error) {
       setError('Kunde inte uppdatera status. Försök igen.')
+      showToast('Något gick fel', 'error')
       setUpdating(false)
     } else {
-      setQuote(prev => ({ ...prev, status }))
+      setQuote(prev => ({ ...prev, status, updated_at: new Date().toISOString() }))
+      const statusLabel = STATUS_CONFIG[status]?.label ?? status
+      showToast(`Status ändrad till ${statusLabel}`, 'success')
       setUpdating(false)
     }
   }
@@ -168,7 +182,10 @@ export default function QuoteDetail() {
       .eq('id', id)
       .eq('user_id', user.id)
     if (quoteErr) { setError('Kunde inte radera offerten. Försök igen.'); setDeleting(false) }
-    else navigate('/quotes')
+    else {
+      showToast('Offerten raderades', 'info')
+      navigate('/quotes')
+    }
   }
 
   async function handleDownloadPDF() {
@@ -275,17 +292,6 @@ export default function QuoteDetail() {
           )}
         </div>
       </section>
-
-      {/* Saved banner */}
-      {savedBanner && (
-        <div className="bg-green-50 border-b border-green-100 px-5 py-3 flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-success flex-shrink-0" />
-          <span className="text-sm font-semibold text-success flex-1">Offerten sparades</span>
-          <button onClick={() => setSavedBanner(false)} className="text-green-400 hover:text-green-600 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       <div className="max-w-lg mx-auto px-4 py-5 space-y-4">
 
@@ -439,6 +445,17 @@ export default function QuoteDetail() {
         {error && <p className="text-sm text-danger px-1">{error}</p>}
 
         <ActionButtons status={status} updating={updating} onUpdate={updateStatus} quoteId={id} />
+
+        {/* Aktivitet */}
+        <ActivityLog
+          events={[
+            { label: 'Offert skapad', date: quote.created_at },
+            status !== 'utkast' && {
+              label: `Status ändrad till ${cfg.label}`,
+              date: quote.updated_at ?? quote.created_at,
+            },
+          ].filter(Boolean)}
+        />
 
         {/* Delete */}
         <button

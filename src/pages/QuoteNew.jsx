@@ -3,7 +3,16 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Page, { Noise } from '../components/Premium'
+import { useToast } from '../components/Toast'
 import { ChevronLeft, X, Plus, Loader2 } from 'lucide-react'
+
+const ROW_CSS = `
+@keyframes row-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.row-enter { animation: row-enter 200ms ease both; }
+`
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,7 +51,7 @@ function LineItem({ row, onChange, onRemove }) {
   }
 
   return (
-    <div className="border border-gray-200 rounded-xl p-4 space-y-3 bg-gray-50/50">
+    <div className="row-enter border border-gray-200 rounded-xl p-4 space-y-3 bg-gray-50/50">
       {/* Description + remove */}
       <div className="flex gap-2">
         <input
@@ -132,6 +141,7 @@ function LineItem({ row, onChange, onRemove }) {
 export default function QuoteNew() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const showToast = useToast()
 
   const [customers, setCustomers] = useState([])
   const [customerId, setCustomerId] = useState('')
@@ -258,6 +268,7 @@ export default function QuoteNew() {
       }
     }
 
+    showToast('Offerten sparades', 'success')
     navigate(`/quotes/${quote.id}`)
   }
 
@@ -265,6 +276,7 @@ export default function QuoteNew() {
 
   return (
     <Page className="min-h-screen bg-gray-50">
+      <style>{ROW_CSS}</style>
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         <button
@@ -384,6 +396,29 @@ export default function QuoteNew() {
                   utbetalning från Skatteverket.
                 </p>
               </div>
+
+              {/* Live breakdown — what the deduction means for this quote */}
+              {calc.labourSubtotal > 0 ? (
+                <div className="border border-gray-200 rounded-xl p-4 space-y-2 text-sm bg-gray-50/50">
+                  <SummaryRow label="Arbetskostnad" value={formatSEK(calc.labourSubtotal)} />
+                  <SummaryRow
+                    label={`${rotRutType.toUpperCase()}-avdrag (30%)`}
+                    value={`− ${formatSEK(calc.rotRutDeduction)}`}
+                    valueClass="text-success font-semibold"
+                  />
+                  <div className="border-t border-gray-200 pt-2">
+                    <SummaryRow
+                      label="Kunden betalar"
+                      value={formatSEK(calc.toPay)}
+                      valueClass="text-gray-900 font-bold"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 px-1">
+                  Lägg till en rad av typen Arbete så räknas avdraget ut automatiskt.
+                </p>
+              )}
             </div>
           )}
         </Card>

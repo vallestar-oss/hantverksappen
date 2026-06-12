@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Home, Users, FileText, Briefcase, Receipt } from 'lucide-react'
+import { Home, Users, FileText, Briefcase, Receipt, Search } from 'lucide-react'
 
 const tabs = [
   { label: 'Hem',      path: '/dashboard', Icon: Home },
@@ -9,7 +9,7 @@ const tabs = [
   { label: 'Fakturor', path: '/invoices',  Icon: Receipt },
 ]
 
-export default function BottomNav() {
+export default function BottomNav({ onSearch }) {
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -45,6 +45,18 @@ export default function BottomNav() {
           </button>
         )
       })}
+
+      {/* Global search */}
+      {onSearch && (
+        <button
+          onClick={onSearch}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 relative transition-colors"
+          aria-label="Sök"
+        >
+          <Search className="w-5 h-5 relative z-10 text-gray-400" strokeWidth={2} />
+          <span className="text-[10px] font-semibold relative z-10 text-gray-400">Sök</span>
+        </button>
+      )}
     </nav>
   )
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useParams, Link, useLocation } from 'react-router-dom'
 import { SkeletonPage } from '../components/Skeleton'
 import { supabase } from '../lib/supabase'
@@ -6,9 +6,11 @@ import { useAuth } from '../context/AuthContext'
 import { generateInvoicePDF } from '../utils/generateInvoicePDF'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
 import Page, { Noise } from '../components/Premium'
+import ActivityLog from '../components/ActivityLog'
+import { useToast } from '../components/Toast'
 import {
   ChevronLeft, Pencil, AlertTriangle, Check, Phone, Mail,
-  Download, Bell, X, Trash2, Loader2,
+  Download, Bell, Trash2, Loader2, Landmark,
 } from 'lucide-react'
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -74,10 +76,11 @@ export default function InvoiceDetail() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [savedBanner, setSavedBanner] = useState(location.state?.saved === true)
+  const showToast = useToast()
 
   const [invoice, setInvoice] = useState(null)
   const [items, setItems] = useState([])
+  const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [paying, setPaying] = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
@@ -96,18 +99,35 @@ export default function InvoiceDetail() {
 
       if (err || !data) { navigate('/invoices'); return }
 
-      const { data: itemData } = await supabase
-        .from('invoice_items')
-        .select('*')
-        .eq('invoice_id', id)
-        .order('created_at', { ascending: true })
+      const [{ data: itemData }, { data: profileData }] = await Promise.all([
+        supabase
+          .from('invoice_items')
+          .select('*')
+          .eq('invoice_id', id)
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('company_profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single(),
+      ])
 
       setInvoice(data)
       setItems(itemData ?? [])
+      setProfile(profileData ?? null)
       setLoading(false)
     }
     load()
   }, [id, user.id, navigate])
+
+  // Saved from edit/create flow — show as toast, then clear the state
+  useEffect(() => {
+    if (location.state?.saved === true) {
+      showToast('Fakturan sparades', 'success')
+      window.history.replaceState({}, '')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function handleMarkPaid() {
     setPaying(true)
@@ -126,8 +146,10 @@ export default function InvoiceDetail() {
 
     if (err) {
       setError('Kunde inte uppdatera fakturan. Försök igen.')
+      showToast('Något gick fel', 'error')
     } else {
       setInvoice(prev => ({ ...prev, ...patch }))
+      showToast('Fakturan markerades som betald', 'success')
     }
     setPaying(false)
   }
@@ -151,7 +173,10 @@ export default function InvoiceDetail() {
       .eq('id', id)
       .eq('user_id', user.id)
     if (invErr) { setError('Kunde inte radera fakturan. Försök igen.'); setDeleting(false) }
-    else navigate('/invoices')
+    else {
+      showToast('Fakturan raderades', 'info')
+      navigate('/invoices')
+    }
   }
 
   async function handleDownloadPDF() {
@@ -256,17 +281,6 @@ export default function InvoiceDetail() {
           )}
         </div>
       </section>
-
-      {/* Saved banner */}
-      {savedBanner && (
-        <div className="bg-green-50 border-b border-green-100 px-5 py-3 flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-success flex-shrink-0" />
-          <span className="text-sm font-semibold text-success flex-1">Fakturan sparades</span>
-          <button onClick={() => setSavedBanner(false)} className="text-green-400 hover:text-green-600 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       <div className="max-w-lg mx-auto px-4 py-5 space-y-4">
 
@@ -443,6 +457,57 @@ export default function InvoiceDetail() {
           </div>
         </Card>
 
+        {/* ── Betalningsinformation ── */}
+        <Card title="Betalningsinformation">
+          {profile?.company_name && (
+            <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+              {profile.logo_url ? (
+                <img src={profile.logo_url} alt="" className="h-9 w-9 object-contain rounded-lg border border-gray-100 flex-shrink-0" />
+              ) : (
+                <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                  <Landmark className="w-4 h-4 text-primary" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-800 truncate">{profile.company_name}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {[profile.org_number && `Org.nr ${profile.org_number}`, profile.f_skatt && 'Innehar F-skattsedel'].filter(Boolean).join(' · ') || 'Betalningsmottagare'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            {profile?.bankgiro && (
+              <DetailRow label="Bankgiro">
+                <span className="text-sm font-semibold text-gray-800 tabular-nums">{profile.bankgiro}</span>
+              </DetailRow>
+            )}
+            {profile?.swish && (
+              <DetailRow label="Swish">
+                <span className="text-sm font-semibold text-gray-800 tabular-nums">{profile.swish}</span>
+              </DetailRow>
+            )}
+            <DetailRow label="Referens">
+              <span className="text-sm font-semibold text-gray-800 tabular-nums">{invoice.invoice_number ?? '–'}</span>
+            </DetailRow>
+            <DetailRow label="Förfallodatum">
+              <span className={`text-sm font-semibold ${isOverdue ? 'text-danger' : 'text-gray-800'}`}>
+                {formatDate(invoice.due_date)}
+              </span>
+            </DetailRow>
+            <DetailRow label="Att betala">
+              <span className="text-sm font-bold text-gray-900 tabular-nums">{formatSEK(totals.toPay)}</span>
+            </DetailRow>
+          </div>
+
+          {!profile?.bankgiro && !profile?.swish && (
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Lägg till bankgiro eller Swish under Inställningar så visas de här och på dina PDF-fakturor.
+            </p>
+          )}
+        </Card>
+
         {error && <p className="text-sm text-danger px-1">{error}</p>}
 
         {/* ── Ladda ner PDF ── */}
@@ -470,6 +535,22 @@ export default function InvoiceDetail() {
             Skicka påminnelse
           </a>
         )}
+
+        {/* ── Aktivitet ── */}
+        <ActivityLog
+          events={[
+            { label: 'Faktura skapad', date: invoice.created_at },
+            invoice.status === 'betald' && invoice.paid_date && {
+              // updated_at carries the full timestamp so the event sorts after
+              // "Faktura skapad" on the same day (paid_date is date-only)
+              label: 'Markerad som betald', date: invoice.updated_at ?? invoice.paid_date,
+            },
+            isOverdue && {
+              label: `Förföll — ${overdueDays} ${overdueDays === 1 ? 'dag' : 'dagar'} sedan`,
+              date: invoice.due_date,
+            },
+          ].filter(Boolean)}
+        />
 
         {/* ── Radera faktura ── */}
         <button

@@ -1,7 +1,10 @@
+import { useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Home, Users, FileText, Briefcase, Receipt, Settings, LogOut, Calendar, Wrench } from 'lucide-react'
+import { Home, Users, FileText, Briefcase, Receipt, Settings, LogOut, Calendar, Wrench, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import BottomNav from './BottomNav'
+import GlobalSearch from './GlobalSearch'
+import { ToastProvider } from './Toast'
 
 const NAV_ITEMS = [
   { label: 'Hem',      path: '/dashboard',     Icon: Home },
@@ -15,6 +18,21 @@ const NAV_ITEMS = [
 export default function Layout({ children }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const [searchOpen, setSearchOpen] = useState(false)
+
+  const closeSearch = useCallback(() => setSearchOpen(false), [])
+
+  // Ctrl+K / Cmd+K opens global search anywhere in the app
+  useEffect(() => {
+    function onKey(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setSearchOpen(open => !open)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   function isActive(path) {
     if (path === '/dashboard') return location.pathname === '/dashboard'
@@ -28,6 +46,7 @@ export default function Layout({ children }) {
   }
 
   return (
+    <ToastProvider>
     <div className="min-h-screen flex bg-[#F8F8F8]">
       {/* ── Sidebar — desktop only ─────────────────────────────────────── */}
       <aside
@@ -40,6 +59,20 @@ export default function Layout({ children }) {
           <span className="font-bold text-white text-[16px] tracking-tight">
             Hantverksappen
           </span>
+        </div>
+
+        {/* Global search trigger */}
+        <div className="px-2 pt-3">
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium text-gray-400 hover:bg-white/[0.05] hover:text-white transition-all"
+          >
+            <Search className="w-[17px] h-[17px] flex-shrink-0" strokeWidth={2} />
+            <span className="flex-1 text-left">Sök</span>
+            <kbd className="text-[10px] font-semibold text-gray-500 border border-white/10 rounded px-1.5 py-0.5">
+              Ctrl K
+            </kbd>
+          </button>
         </div>
 
         {/* Nav items */}
@@ -99,8 +132,12 @@ export default function Layout({ children }) {
 
       {/* ── Bottom nav — mobile only ──────────────────────────────────── */}
       <div className="md:hidden">
-        <BottomNav />
+        <BottomNav onSearch={() => setSearchOpen(true)} />
       </div>
+
+      {/* ── Global search modal ───────────────────────────────────────── */}
+      <GlobalSearch open={searchOpen} onClose={closeSearch} />
     </div>
+    </ToastProvider>
   )
 }

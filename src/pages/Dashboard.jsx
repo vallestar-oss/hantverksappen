@@ -4,9 +4,10 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Page, { Noise } from '../components/Premium'
 import EmptyState from '../components/EmptyState'
+import Onboarding, { onboardingDoneKey } from '../components/Onboarding'
 import {
   Settings, LogOut, Briefcase, Receipt, FileText, AlertCircle,
-  Plus, ArrowRight,
+  ArrowRight, UserPlus,
 } from 'lucide-react'
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -67,6 +68,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ activeJobs: 0, unpaidInvoices: 0, pendingQuotes: 0, monthlyRevenue: 0 })
   const [recentItems, setRecentItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   useEffect(() => {
     async function fetchAll() {
@@ -80,6 +82,11 @@ export default function Dashboard() {
 
       setCompanyName(profile?.company_name ?? '')
       setLogoUrl(profile?.logo_url ?? '')
+
+      // First login — no company profile yet → run onboarding once
+      if (!profile?.company_name && !localStorage.getItem(onboardingDoneKey(user.id))) {
+        setShowOnboarding(true)
+      }
 
       const jobList     = jobs     ?? []
       const invoiceList = invoices ?? []
@@ -199,21 +206,28 @@ export default function Dashboard() {
   }
 
   function QuickActions() {
+    const secondaryCls =
+      'btn-lift flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 active:bg-gray-100 text-gray-700 font-semibold h-11 rounded-xl text-sm'
     return (
-      <div className="flex gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <button
           onClick={() => navigate('/jobs/new')}
-          className="btn-lift flex-1 flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white font-semibold h-11 rounded-xl text-sm"
+          className="btn-lift flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white font-semibold h-11 rounded-xl text-sm"
         >
-          <Plus className="w-4 h-4" />
+          <Briefcase className="w-4 h-4" />
           Nytt jobb
         </button>
-        <button
-          onClick={() => navigate('/quotes/new')}
-          className="btn-lift flex-1 flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 active:bg-gray-100 text-gray-700 font-semibold h-11 rounded-xl text-sm"
-        >
-          <Plus className="w-4 h-4" />
+        <button onClick={() => navigate('/quotes/new')} className={secondaryCls}>
+          <FileText className="w-4 h-4 text-gray-400" />
           Ny offert
+        </button>
+        <button onClick={() => navigate('/invoices/new')} className={secondaryCls}>
+          <Receipt className="w-4 h-4 text-gray-400" />
+          Ny faktura
+        </button>
+        <button onClick={() => navigate('/customers/new')} className={secondaryCls}>
+          <UserPlus className="w-4 h-4 text-gray-400" />
+          Ny kund
         </button>
       </div>
     )
@@ -340,6 +354,17 @@ export default function Dashboard() {
 
   return (
     <Page className="min-h-screen flex flex-col">
+
+      {/* First-login onboarding — covers the whole app until completed */}
+      {showOnboarding && !loading && (
+        <Onboarding
+          onComplete={({ company_name, logo_url }) => {
+            if (company_name) setCompanyName(company_name)
+            if (logo_url) setLogoUrl(logo_url)
+            setShowOnboarding(false)
+          }}
+        />
+      )}
 
       {/* Mobile header — hidden on desktop (sidebar handles navigation) */}
       <header className="md:hidden bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between sticky top-0 z-10">

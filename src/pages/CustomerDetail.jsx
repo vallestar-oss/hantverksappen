@@ -6,6 +6,8 @@ import { ChevronLeft, Pencil, Phone, Mail, MapPin, StickyNote, Briefcase, Chevro
 import { SkeletonPage } from '../components/Skeleton'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
 import { Fx } from '../components/Premium'
+import ActivityLog from '../components/ActivityLog'
+import { useToast } from '../components/Toast'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -94,6 +96,7 @@ export default function CustomerDetail() {
   const { id } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const showToast = useToast()
 
   const [customer, setCustomer] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -176,6 +179,7 @@ export default function CustomerDetail() {
       setDeleteError('Kunde inte radera kunden. Försök igen.')
       setDeleting(false)
     } else {
+      showToast('Kunden raderades', 'info')
       navigate('/customers')
     }
   }
@@ -347,6 +351,18 @@ export default function CustomerDetail() {
             />
           )}
         </div>
+
+        {/* Aktivitet */}
+        {!historyLoading && (
+          <ActivityLog
+            events={[
+              customer.created_at && { label: 'Kund tillagd', date: customer.created_at },
+              ...quotes.map(q => ({ label: `Offert ${q.quote_number ?? ''} skapad`.trim(), date: q.created_at })),
+              ...jobs.map(j => ({ label: `Jobb skapat — ${j.title ?? 'Namnlöst'}`, date: j.scheduled_date })),
+              ...invoices.map(inv => ({ label: `Faktura ${inv.invoice_number ?? ''} skapad`.trim(), date: inv.invoice_date })),
+            ].filter(Boolean).slice(-20)}
+          />
+        )}
 
         {deleteError && (
           <div className="bg-red-50 text-red-600 rounded-xl px-4 py-3 text-sm">{deleteError}</div>

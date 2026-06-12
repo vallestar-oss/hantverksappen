@@ -4,10 +4,12 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { ChevronLeft, AlertCircle } from 'lucide-react'
 import { Fx } from '../components/Premium'
+import { useToast } from '../components/Toast'
 
 export default function CustomerNew() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const showToast = useToast()
 
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', postal_code: '', city: '', notes: '' })
   const [saving, setSaving] = useState(false)
@@ -34,7 +36,10 @@ export default function CustomerNew() {
       notes: form.notes.trim() || null,
     })
     if (error) { setError('Kunde inte spara kunden. Försök igen.'); setSaving(false) }
-    else navigate('/customers')
+    else {
+      showToast('Kunden lades till', 'success')
+      navigate('/customers')
+    }
   }
 
   return (
