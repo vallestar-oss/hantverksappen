@@ -4,20 +4,20 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Page from '../components/Premium'
 import EmptyState from '../components/EmptyState'
-import { Calendar, Plus } from 'lucide-react'
+import { Calendar, Plus, ChevronRight } from 'lucide-react'
 import { SkeletonRow } from '../components/Skeleton'
 
 const STATUSES = [
   { key: 'alla',     label: 'Alla' },
-  { key: 'planerad', label: 'Planerad' },
   { key: 'pågående', label: 'Pågående' },
+  { key: 'planerad', label: 'Planerad' },
   { key: 'avslutad', label: 'Avslutad' },
 ]
 
-const BADGE = {
-  planerad: 'bg-blue-100 text-blue-700',
-  pågående: 'bg-amber-100 text-amber-700',
-  avslutad: 'bg-green-100 text-green-700',
+const BADGE_CLS = {
+  planerad: 'badge badge-blue',
+  pågående: 'badge badge-amber',
+  avslutad: 'badge badge-green',
 }
 
 const STATUS_LABEL = {
@@ -26,14 +26,8 @@ const STATUS_LABEL = {
   avslutad: 'Avslutad',
 }
 
-const STATUS_DOT = {
-  planerad: 'bg-blue-400',
-  pågående: 'bg-amber-400',
-  avslutad: 'bg-green-500',
-}
-
 function formatDate(iso) {
-  if (!iso) return '–'
+  if (!iso) return ''
   return new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'short' }).format(new Date(iso))
 }
 
@@ -64,41 +58,53 @@ export default function Jobs() {
 
   return (
     <Page className="min-h-screen flex flex-col pb-20 md:pb-0">
-      <div className="flex flex-col flex-1" style={{ background: '#F8F8F8' }}>
+      <div className="flex flex-col flex-1" style={{ background: '#F4F3F1' }}>
 
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-4 md:px-12 pt-4 pb-0 sticky top-0 z-10">
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="font-extrabold text-gray-900 text-xl tracking-tight">Jobb</h1>
+        {/* Header with filter tabs */}
+        <header
+          className="sticky top-0 z-10"
+          style={{
+            background: 'rgba(244,243,241,0.92)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+          }}
+        >
+          <div
+            className="px-4 md:px-10 h-[58px] flex items-center justify-between"
+          >
+            <h1 className="font-bold text-[18px]" style={{ color: '#111111', letterSpacing: '-0.025em' }}>
+              Jobb
+            </h1>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => navigate('/jobs/calendar')}
-                className="text-gray-400 hover:text-gray-700 transition-colors p-2 rounded-xl hover:bg-gray-50"
+                className="p-2 rounded-xl transition-colors"
+                style={{ color: '#AAAAAA' }}
                 aria-label="Kalendervy"
               >
-                <Calendar className="w-5 h-5" />
+                <Calendar className="w-[19px] h-[19px]" />
               </button>
               <button
                 onClick={() => navigate('/jobs/new')}
-                className="hidden md:flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-semibold px-4 h-9 rounded-lg text-sm transition-colors"
+                className="hidden md:flex items-center gap-1.5 text-white font-semibold px-4 h-8 rounded-lg text-[13px] btn-lift"
+                style={{ background: '#0055FF' }}
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-3.5 h-3.5" />
                 Nytt jobb
               </button>
             </div>
           </div>
 
-          {/* Filter pills */}
-          <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
+          {/* Filter tabs */}
+          <div
+            className="px-4 md:px-10 flex gap-5 overflow-x-auto scrollbar-hide"
+            style={{ borderBottom: '1px solid rgba(0,0,0,0.07)' }}
+          >
             {STATUSES.map(s => (
               <button
                 key={s.key}
                 onClick={() => setActiveFilter(s.key)}
-                className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all ${
-                  activeFilter === s.key
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                }`}
+                className={`filter-tab ${activeFilter === s.key ? 'is-active' : ''}`}
               >
                 {s.label}
               </button>
@@ -106,49 +112,55 @@ export default function Jobs() {
           </div>
         </header>
 
-        <div className="px-4 md:px-12 pt-4 flex-1">
+        <div className="px-4 md:px-10 pt-4 flex-1">
           {loading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}
+            <div className="row-list">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className={i > 0 ? 'border-t border-[#F1F0EE]' : ''}>
+                  <SkeletonRow />
+                </div>
+              ))}
             </div>
           ) : jobs.length === 0 ? (
             <EmptyState
               illustration="jobs"
               title="Du har inga jobb ännu"
-              text="Planera, följ och avsluta dina jobb — från första kontakt till skickad faktura."
+              text="Planera, följ och avsluta dina jobb - från första kontakt till skickad faktura."
               ctaLabel="Skapa ditt första jobb"
               onCta={() => navigate('/jobs/new')}
             />
           ) : filtered.length === 0 ? (
             <div className="flex items-center justify-center py-20">
-              <p className="text-gray-400 text-sm">Inga jobb med vald status.</p>
+              <p className="text-[13.5px]" style={{ color: '#AAAAAA' }}>Inga jobb med vald status.</p>
             </div>
           ) : (
             <>
-              {/* Mobile: card list */}
-              <div className="md:hidden space-y-2">
-                {filtered.map(job => {
+              {/* Mobile + Desktop: unified flat list */}
+              <div className="md:hidden row-list">
+                {filtered.map((job, idx) => {
                   const status = job.status ?? 'planerad'
                   return (
                     <button
                       key={job.id}
                       onClick={() => navigate(`/jobs/${job.id}`)}
-                      className="card-lift w-full flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3.5 text-left hover:border-gray-300 active:bg-gray-50"
+                      className="row-item stagger-item px-4 py-[15px] gap-3"
+                      style={{ animationDelay: `${idx * 30}ms` }}
                     >
-                      <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5 ${STATUS_DOT[status] ?? STATUS_DOT.planerad}`} />
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-800 text-sm truncate">
+                        <p className="font-semibold text-[13.5px] truncate" style={{ color: '#111111' }}>
                           {job.title ?? 'Namnlöst jobb'}
                         </p>
-                        <p className="text-xs text-gray-400 mt-0.5 truncate">
-                          {job.customers?.name ?? '–'}
+                        <p className="text-[12px] mt-0.5 truncate" style={{ color: '#999999' }}>
+                          {job.customers?.name ?? ''}
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                         {job.scheduled_date && (
-                          <span className="text-xs text-gray-400">{formatDate(job.scheduled_date)}</span>
+                          <span className="text-[11.5px]" style={{ color: '#AAAAAA' }}>
+                            {formatDate(job.scheduled_date)}
+                          </span>
                         )}
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${BADGE[status] ?? BADGE.planerad}`}>
+                        <span className={BADGE_CLS[status] ?? BADGE_CLS.planerad}>
                           {STATUS_LABEL[status] ?? status}
                         </span>
                       </div>
@@ -157,15 +169,18 @@ export default function Jobs() {
                 })}
               </div>
 
-              {/* Desktop: table */}
-              <div className="hidden md:block bg-white rounded-xl border border-gray-200 overflow-hidden">
+              {/* Desktop table */}
+              <div
+                className="hidden md:block bg-white overflow-hidden"
+                style={{ borderRadius: 14, border: '1px solid #E8E8E6' }}
+              >
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Titel</th>
-                      <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Kund</th>
-                      <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Datum</th>
-                      <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Status</th>
+                    <tr style={{ borderBottom: '1px solid #F1F0EE' }}>
+                      <th className="text-left px-5 py-3 text-[11px] font-semibold tracking-wider" style={{ color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Titel</th>
+                      <th className="text-left px-5 py-3 text-[11px] font-semibold tracking-wider" style={{ color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Kund</th>
+                      <th className="text-left px-5 py-3 text-[11px] font-semibold tracking-wider" style={{ color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Datum</th>
+                      <th className="text-left px-5 py-3 text-[11px] font-semibold tracking-wider" style={{ color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -175,15 +190,18 @@ export default function Jobs() {
                         <tr
                           key={job.id}
                           onClick={() => navigate(`/jobs/${job.id}`)}
-                          className={`cursor-pointer hover:bg-[#F8F8F8] transition-colors ${i < filtered.length - 1 ? 'border-b border-gray-100' : ''}`}
+                          className="cursor-pointer transition-colors"
+                          style={{ borderTop: i > 0 ? '1px solid #F1F0EE' : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#FAFAF8'}
+                          onMouseLeave={e => e.currentTarget.style.background = ''}
                         >
-                          <td className="px-5 py-4">
-                            <span className="font-medium text-gray-800">{job.title ?? 'Namnlöst jobb'}</span>
+                          <td className="px-5 py-4 font-medium" style={{ color: '#111111' }}>
+                            {job.title ?? 'Namnlöst jobb'}
                           </td>
-                          <td className="px-5 py-4 text-gray-500">{job.customers?.name ?? '–'}</td>
-                          <td className="px-5 py-4 text-gray-500">{formatDate(job.scheduled_date)}</td>
+                          <td className="px-5 py-4" style={{ color: '#777777' }}>{job.customers?.name ?? ''}</td>
+                          <td className="px-5 py-4" style={{ color: '#999999' }}>{formatDate(job.scheduled_date)}</td>
                           <td className="px-5 py-4">
-                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${BADGE[status] ?? BADGE.planerad}`}>
+                            <span className={BADGE_CLS[status] ?? BADGE_CLS.planerad}>
                               {STATUS_LABEL[status] ?? status}
                             </span>
                           </td>
@@ -200,12 +218,12 @@ export default function Jobs() {
         {/* FAB — mobile only */}
         <button
           onClick={() => navigate('/jobs/new')}
-          className="md:hidden btn-lift fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white rounded-full shadow-lg shadow-gray-900/15 flex items-center justify-center z-10"
+          className="md:hidden btn-lift fixed bottom-[74px] right-4 w-[52px] h-[52px] text-white rounded-full flex items-center justify-center z-10"
+          style={{ background: '#0055FF', boxShadow: '0 4px 16px rgba(0,85,255,0.35)' }}
           aria-label="Nytt jobb"
         >
-          <Plus className="w-6 h-6" />
+          <Plus className="w-5 h-5" />
         </button>
-
       </div>
     </Page>
   )

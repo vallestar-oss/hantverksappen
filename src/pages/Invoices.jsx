@@ -4,17 +4,17 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Page from '../components/Premium'
 import EmptyState from '../components/EmptyState'
-import { Receipt, Plus, Check } from 'lucide-react'
+import { Plus, Check } from 'lucide-react'
 import { SkeletonListRow } from '../components/Skeleton'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
 function formatSEK(n) {
-  return new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 2 }).format(n ?? 0) + ' kr'
+  return new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 }).format(n ?? 0) + ' kr'
 }
 
 function formatDate(iso) {
-  if (!iso) return '–'
+  if (!iso) return ''
   return new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'short' }).format(new Date(iso))
 }
 
@@ -28,21 +28,9 @@ function effectiveStatus(invoice) {
 // ── badge config ───────────────────────────────────────────────────────────
 
 const BADGE = {
-  obetald:  { label: 'Obetald',  cls: 'bg-amber-100 text-amber-700' },
-  betald:   { label: 'Betald',   cls: 'bg-green-100 text-green-700 glow-success' },
-  försenad: { label: 'Försenad', cls: 'bg-red-100 text-red-700 glow-danger' },
-}
-
-const ICON_BG = {
-  obetald:  'bg-amber-50',
-  betald:   'bg-green-50',
-  försenad: 'bg-red-50',
-}
-
-const ICON_COLOR = {
-  obetald:  'text-amber-600',
-  betald:   'text-green-600',
-  försenad: 'text-red-500',
+  obetald:  { label: 'Obetald',  cls: 'badge badge-amber' },
+  betald:   { label: 'Betald',   cls: 'badge badge-green' },
+  försenad: { label: 'Försenad', cls: 'badge badge-red' },
 }
 
 const FILTERS = [
@@ -89,32 +77,41 @@ export default function Invoices() {
 
   return (
     <Page className="min-h-screen flex flex-col pb-20 md:pb-0">
-      <div className="flex flex-col flex-1" style={{ background: '#F8F8F8' }}>
+      <div className="flex flex-col flex-1" style={{ background: '#F4F3F1' }}>
 
-        {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-4 md:px-12 pt-4 pb-0 sticky top-0 z-10">
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="font-extrabold text-gray-900 text-xl tracking-tight">Fakturor</h1>
+        {/* Header with filter tabs */}
+        <header
+          className="sticky top-0 z-10"
+          style={{
+            background: 'rgba(244,243,241,0.92)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+          }}
+        >
+          <div className="px-4 md:px-10 h-[58px] flex items-center justify-between">
+            <h1 className="font-bold text-[18px]" style={{ color: '#111111', letterSpacing: '-0.025em' }}>
+              Fakturor
+            </h1>
             <button
               onClick={() => navigate('/invoices/new')}
-              className="hidden md:flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-semibold px-4 h-9 rounded-lg text-sm transition-colors"
+              className="hidden md:flex items-center gap-1.5 text-white font-semibold px-4 h-8 rounded-lg text-[13px] btn-lift"
+              style={{ background: '#0055FF' }}
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               Ny faktura
             </button>
           </div>
 
-          {/* Filter pills */}
-          <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
+          {/* Filter tabs */}
+          <div
+            className="px-4 md:px-10 flex gap-5 overflow-x-auto scrollbar-hide"
+            style={{ borderBottom: '1px solid rgba(0,0,0,0.07)' }}
+          >
             {FILTERS.map(f => (
               <button
                 key={f.key}
                 onClick={() => setActiveFilter(f.key)}
-                className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all ${
-                  activeFilter === f.key
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                }`}
+                className={`filter-tab ${activeFilter === f.key ? 'is-active' : ''}`}
               >
                 {f.label}
               </button>
@@ -122,28 +119,32 @@ export default function Invoices() {
           </div>
         </header>
 
-        <div className="px-4 md:px-12 pt-4 flex-1">
+        <div className="px-4 md:px-10 pt-4 flex-1">
           {loading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => <SkeletonListRow key={i} />)}
+            <div className="row-list">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className={i > 0 ? 'border-t border-[#F1F0EE]' : ''}>
+                  <SkeletonListRow />
+                </div>
+              ))}
             </div>
           ) : invoices.length === 0 ? (
             <EmptyState
               illustration="invoices"
               title="Du har inga fakturor ännu"
-              text="Skapa en faktura direkt när jobbet är klart — med ROT/RUT och PDF-export."
+              text="Skapa en faktura direkt när jobbet är klart - med ROT/RUT och PDF-export."
               ctaLabel="Skapa din första faktura"
               onCta={() => navigate('/invoices/new')}
             />
           ) : filtered.length === 0 ? (
             <div className="flex items-center justify-center py-20">
-              <p className="text-gray-400 text-sm">Inga fakturor med vald status.</p>
+              <p className="text-[13.5px]" style={{ color: '#AAAAAA' }}>Inga fakturor med vald status.</p>
             </div>
           ) : (
             <>
-              {/* Mobile: card list */}
-              <div className="md:hidden space-y-2">
-                {filtered.map(inv => {
+              {/* Mobile list */}
+              <div className="md:hidden row-list">
+                {filtered.map((inv, idx) => {
                   const status = effectiveStatus(inv)
                   const badge = BADGE[status] ?? BADGE.obetald
                   const total = getTotal(inv)
@@ -151,27 +152,29 @@ export default function Invoices() {
                     <button
                       key={inv.id}
                       onClick={() => navigate(`/invoices/${inv.id}`)}
-                      className="card-lift w-full flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3.5 text-left hover:border-gray-300 active:bg-gray-50"
+                      className="row-item stagger-item px-4 py-[15px] gap-3"
+                      style={{ animationDelay: `${idx * 30}ms` }}
                     >
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${ICON_BG[status] ?? 'bg-gray-50'}`}>
-                        <Receipt className={`w-5 h-5 ${ICON_COLOR[status] ?? 'text-gray-400'}`} />
-                      </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-800 text-sm truncate">
-                          Faktura #{inv.invoice_number ?? '–'}
+                        <p className="font-semibold text-[13.5px] truncate" style={{ color: '#111111' }}>
+                          Faktura {inv.invoice_number ? `#${inv.invoice_number}` : ''}
                         </p>
-                        <p className="text-xs text-gray-400 mt-0.5 truncate">
-                          {inv.customers?.name ?? '–'}
+                        <p className="text-[12px] mt-0.5 truncate" style={{ color: '#999999' }}>
+                          {inv.customers?.name ?? ''}
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                        <span className="text-sm font-bold text-gray-800 tabular-nums">{formatSEK(total)}</span>
-                        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${badge.cls}`}>
-                          {status === 'betald' && <Check className="w-3 h-3" strokeWidth={3} />}
+                        <span className="font-bold text-[13.5px] tabular-nums" style={{ color: '#111111' }}>
+                          {formatSEK(total)}
+                        </span>
+                        <span className={badge.cls}>
+                          {status === 'betald' && <Check style={{ width: 9, height: 9 }} strokeWidth={3} />}
                           {badge.label}
                         </span>
                         {inv.due_date && (
-                          <span className="text-xs text-gray-400">Förfaller {formatDate(inv.due_date)}</span>
+                          <span className="text-[11px]" style={{ color: '#BBBBBB' }}>
+                            {formatDate(inv.due_date)}
+                          </span>
                         )}
                       </div>
                     </button>
@@ -179,16 +182,19 @@ export default function Invoices() {
                 })}
               </div>
 
-              {/* Desktop: table */}
-              <div className="hidden md:block bg-white rounded-xl border border-gray-200 overflow-hidden">
+              {/* Desktop table */}
+              <div
+                className="hidden md:block bg-white overflow-hidden"
+                style={{ borderRadius: 14, border: '1px solid #E8E8E6' }}
+              >
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Nr</th>
-                      <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Kund</th>
-                      <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Förfallodatum</th>
-                      <th className="text-right px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Belopp</th>
-                      <th className="text-left px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Status</th>
+                    <tr style={{ borderBottom: '1px solid #F1F0EE' }}>
+                      <th className="text-left px-5 py-3 text-[11px] font-semibold" style={{ color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Nr</th>
+                      <th className="text-left px-5 py-3 text-[11px] font-semibold" style={{ color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Kund</th>
+                      <th className="text-left px-5 py-3 text-[11px] font-semibold" style={{ color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Förfall</th>
+                      <th className="text-right px-5 py-3 text-[11px] font-semibold" style={{ color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Belopp</th>
+                      <th className="text-left px-5 py-3 text-[11px] font-semibold" style={{ color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -200,17 +206,22 @@ export default function Invoices() {
                         <tr
                           key={inv.id}
                           onClick={() => navigate(`/invoices/${inv.id}`)}
-                          className={`cursor-pointer hover:bg-[#F8F8F8] transition-colors ${i < filtered.length - 1 ? 'border-b border-gray-100' : ''}`}
+                          className="cursor-pointer transition-colors"
+                          style={{ borderTop: i > 0 ? '1px solid #F1F0EE' : 'none' }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#FAFAF8'}
+                          onMouseLeave={e => e.currentTarget.style.background = ''}
                         >
-                          <td className="px-5 py-4 font-medium text-gray-700">
-                            #{inv.invoice_number ?? '–'}
+                          <td className="px-5 py-4 font-medium" style={{ color: '#111111' }}>
+                            #{inv.invoice_number ?? ''}
                           </td>
-                          <td className="px-5 py-4 text-gray-700">{inv.customers?.name ?? '–'}</td>
-                          <td className="px-5 py-4 text-gray-500">{formatDate(inv.due_date)}</td>
-                          <td className="px-5 py-4 text-right font-semibold text-gray-800 tabular-nums">{formatSEK(total)}</td>
+                          <td className="px-5 py-4" style={{ color: '#777777' }}>{inv.customers?.name ?? ''}</td>
+                          <td className="px-5 py-4" style={{ color: '#999999' }}>{formatDate(inv.due_date)}</td>
+                          <td className="px-5 py-4 text-right font-semibold tabular-nums" style={{ color: '#111111' }}>
+                            {formatSEK(total)}
+                          </td>
                           <td className="px-5 py-4">
-                            <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${badge.cls}`}>
-                              {status === 'betald' && <Check className="w-3 h-3" strokeWidth={3} />}
+                            <span className={badge.cls}>
+                              {status === 'betald' && <Check style={{ width: 9, height: 9 }} strokeWidth={3} />}
                               {badge.label}
                             </span>
                           </td>
@@ -227,12 +238,12 @@ export default function Invoices() {
         {/* FAB — mobile only */}
         <button
           onClick={() => navigate('/invoices/new')}
-          className="md:hidden btn-lift fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white rounded-full shadow-lg shadow-gray-900/15 flex items-center justify-center z-10"
+          className="md:hidden btn-lift fixed bottom-[74px] right-4 w-[52px] h-[52px] text-white rounded-full flex items-center justify-center z-10"
+          style={{ background: '#0055FF', boxShadow: '0 4px 16px rgba(0,85,255,0.35)' }}
           aria-label="Ny faktura"
         >
-          <Plus className="w-6 h-6" />
+          <Plus className="w-5 h-5" />
         </button>
-
       </div>
     </Page>
   )

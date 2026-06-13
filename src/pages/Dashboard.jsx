@@ -7,7 +7,7 @@ import EmptyState from '../components/EmptyState'
 import Onboarding, { onboardingDoneKey } from '../components/Onboarding'
 import {
   Settings, LogOut, Briefcase, Receipt, FileText, AlertCircle,
-  ArrowRight, UserPlus,
+  ArrowRight, UserPlus, ChevronRight,
 } from 'lucide-react'
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -44,18 +44,10 @@ function invStatus(inv) {
 
 // ── badge config ───────────────────────────────────────────────────────────
 
-const JOB_BADGE = {
-  planerad: 'bg-blue-100 text-blue-700',
-  pågående: 'bg-amber-100 text-amber-700',
-  avslutad: 'bg-green-100 text-green-700',
-}
-const INV_BADGE = {
-  obetald:  'bg-amber-100 text-amber-700',
-  betald:   'bg-green-100 text-green-700 glow-success',
-  försenad: 'bg-red-100 text-red-700 glow-danger',
-}
-const JOB_LABEL = { planerad: 'Planerad', pågående: 'Pågående', avslutad: 'Avslutad' }
-const INV_LABEL = { obetald: 'Obetald', betald: 'Betald', försenad: 'Försenad' }
+const JOB_BADGE  = { planerad: 'badge badge-blue', pågående: 'badge badge-amber', avslutad: 'badge badge-green' }
+const INV_BADGE  = { obetald: 'badge badge-amber', betald: 'badge badge-green', försenad: 'badge badge-red' }
+const JOB_LABEL  = { planerad: 'Planerad', pågående: 'Pågående', avslutad: 'Avslutad' }
+const INV_LABEL  = { obetald: 'Obetald', betald: 'Betald', försenad: 'Försenad' }
 
 // ── component ──────────────────────────────────────────────────────────────
 
@@ -83,7 +75,6 @@ export default function Dashboard() {
       setCompanyName(profile?.company_name ?? '')
       setLogoUrl(profile?.logo_url ?? '')
 
-      // First login — no company profile yet → run onboarding once
       if (!profile?.company_name && !localStorage.getItem(onboardingDoneKey(user.id))) {
         setShowOnboarding(true)
       }
@@ -113,14 +104,14 @@ export default function Dashboard() {
         })),
         ...invoiceList.map(inv => ({
           type: 'invoice', id: inv.id,
-          title: `Faktura ${inv.invoice_number ?? '–'}`,
+          title: `Faktura ${inv.invoice_number ?? ''}`,
           customer: inv.customers?.name ?? '',
           status: invStatus(inv),
           date: inv.due_date ?? inv.updated_at,
           updated_at: inv.updated_at,
           path: `/invoices/${inv.id}`,
         })),
-      ].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)).slice(0, 5)
+      ].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)).slice(0, 6)
 
       setRecentItems(combined)
       setLoading(false)
@@ -133,11 +124,10 @@ export default function Dashboard() {
     navigate('/login')
   }
 
-  // Attention summary — what needs the user's eyes today
   const attention = [
-    stats.unpaidInvoices > 0 && `${stats.unpaidInvoices} ${stats.unpaidInvoices === 1 ? 'obetald faktura' : 'obetalda fakturor'}`,
-    stats.pendingQuotes > 0 && `${stats.pendingQuotes} ${stats.pendingQuotes === 1 ? 'offert att hantera' : 'offerter att hantera'}`,
-    stats.activeJobs > 0 && `${stats.activeJobs} ${stats.activeJobs === 1 ? 'aktivt jobb' : 'aktiva jobb'}`,
+    stats.unpaidInvoices > 0 && { label: `${stats.unpaidInvoices} ${stats.unpaidInvoices === 1 ? 'faktura obetald' : 'fakturor obetalda'}`, type: 'warn' },
+    stats.pendingQuotes  > 0 && { label: `${stats.pendingQuotes} ${stats.pendingQuotes === 1 ? 'offert väntar' : 'offerter väntar'}`, type: 'info' },
+    stats.activeJobs     > 0 && { label: `${stats.activeJobs} ${stats.activeJobs === 1 ? 'jobb aktivt' : 'jobb aktiva'}`, type: 'info' },
   ].filter(Boolean)
 
   const todayRaw = new Intl.DateTimeFormat('sv-SE', {
@@ -145,88 +135,157 @@ export default function Dashboard() {
   }).format(new Date())
   const todayLabel = todayRaw.charAt(0).toUpperCase() + todayRaw.slice(1)
 
-  // ── Shared sub-components ────────────────────────────────────────────────
+  const statsCards = [
+    { label: 'Aktiva jobb',       value: stats.activeJobs,     path: '/jobs',     accentColor: '#0055FF' },
+    { label: 'Obetalda fakturor', value: stats.unpaidInvoices, path: '/invoices', accentColor: '#D97706' },
+    { label: 'Offerter väntar',   value: stats.pendingQuotes,  path: '/quotes',   accentColor: '#0055FF' },
+  ]
 
-  function HeroSection() {
+  // ── sub-components ─────────────────────────────────────────────────────────
+
+  function RevenueHero() {
     return (
-      <section className="relative overflow-hidden" style={{ background: '#111111' }}>
-        <Noise />
+      <div
+        className="relative rounded-2xl overflow-hidden"
+        style={{ background: '#131313' }}
+      >
+        <Noise opacity={0.035} />
         <div
           aria-hidden="true"
-          className="absolute pointer-events-none"
+          className="absolute inset-0 pointer-events-none"
           style={{
-            top: '-120px', right: '-80px', width: '320px', height: '320px',
-            background: 'radial-gradient(circle, rgba(0,85,255,0.28) 0%, transparent 70%)',
+            background: 'radial-gradient(ellipse 70% 90% at 100% 0%, rgba(0,85,255,0.18) 0%, transparent 65%), radial-gradient(ellipse 40% 60% at 0% 100%, rgba(0,85,255,0.07) 0%, transparent 60%)',
           }}
         />
-        <div className="relative px-4 md:px-8 pt-8 pb-9">
-          {!loading && logoUrl && (
-            <div className="inline-flex items-center rounded-lg px-3 py-2 mb-4" style={{ background: 'rgba(255,255,255,0.12)' }}>
-              <img
-                src={logoUrl}
-                alt="Företagslogotyp"
-                className="object-contain"
-                style={{ maxHeight: '48px' }}
-              />
+        <div className="relative px-5 pt-5 pb-5">
+          <p className="text-[11px] font-semibold tracking-widest" style={{ color: '#555555', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+            Intäkt denna månad
+          </p>
+          {loading ? (
+            <div className="h-11 w-40 rounded-xl mt-2 animate-pulse" style={{ background: '#252525' }} />
+          ) : (
+            <p
+              className="text-gradient-blue font-bold tabular-nums mt-1.5"
+              style={{ fontSize: '2.6rem', letterSpacing: '-0.035em', lineHeight: 1.1 }}
+            >
+              {formatSEK(stats.monthlyRevenue)}
+            </p>
+          )}
+
+          {!loading && attention.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-4">
+              {attention.map(a => (
+                <span
+                  key={a.label}
+                  className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
+                  style={{
+                    background: a.type === 'warn' ? 'rgba(217,119,6,0.15)' : 'rgba(255,255,255,0.08)',
+                    color: a.type === 'warn' ? '#F59E0B' : 'rgba(255,255,255,0.55)',
+                  }}
+                >
+                  {a.label}
+                </span>
+              ))}
             </div>
           )}
-          <p className="text-sm text-gray-400">{todayLabel}</p>
-          <h1 className="text-[2rem] font-extrabold text-white leading-tight mt-1" style={{ letterSpacing: '-0.02em' }}>
-            {loading ? 'Hej' : (companyName ? `Hej, ${companyName}` : 'Hej')}
-          </h1>
-          <div className="mt-7">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-300">
-              Intäkt denna månad
-            </p>
-            {loading ? (
-              <div className="h-12 w-44 rounded-xl animate-pulse mt-2" style={{ background: '#222222' }} />
-            ) : (
-              <p className="text-gradient-blue text-5xl font-extrabold tabular-nums mt-1.5" style={{ letterSpacing: '-0.02em' }}>
-                {formatSEK(stats.monthlyRevenue)}
-              </p>
-            )}
-          </div>
-          {!loading && attention.length > 0 && (
-            <p className="text-sm text-gray-400 mt-5 leading-relaxed">
-              Att hantera: <span className="text-white font-medium">{attention.join(' · ')}</span>
-            </p>
-          )}
           {!loading && attention.length === 0 && (
-            <p className="text-sm text-gray-400 mt-5">Allt är hanterat. Snyggt jobbat.</p>
+            <p className="text-[12px] mt-3" style={{ color: '#444444' }}>Allt hanterat.</p>
           )}
         </div>
-        {/* Fade to content background */}
-        <div
-          aria-hidden="true"
-          className="absolute bottom-0 left-0 right-0 h-10 pointer-events-none"
-          style={{ background: 'linear-gradient(to bottom, transparent, #F8F8F8)' }}
-        />
-      </section>
+      </div>
+    )
+  }
+
+  function MobileStats() {
+    if (loading) {
+      return (
+        <div className="grid grid-cols-3 gap-2.5">
+          {[0,1,2].map(i => (
+            <div key={i} className="stat-card-light animate-pulse">
+              <div className="h-7 w-8 rounded-lg mb-2" style={{ background: '#EBEBEB' }} />
+              <div className="h-3 w-full rounded-full" style={{ background: '#EBEBEB' }} />
+            </div>
+          ))}
+        </div>
+      )
+    }
+    return (
+      <div className="grid grid-cols-3 gap-2.5">
+        {statsCards.map(c => (
+          <button
+            key={c.label}
+            onClick={() => navigate(c.path)}
+            className="stat-card-light text-left"
+          >
+            <p
+              className="font-bold tabular-nums"
+              style={{ fontSize: '1.75rem', letterSpacing: '-0.04em', lineHeight: 1, color: '#111111' }}
+            >
+              {c.value}
+            </p>
+            <p className="text-[11px] mt-1.5 leading-tight" style={{ color: '#999999', fontWeight: 500 }}>
+              {c.label}
+            </p>
+            <div className="mt-3 h-[2px] rounded-full w-8" style={{ background: c.accentColor, opacity: 0.5 }} />
+          </button>
+        ))}
+      </div>
     )
   }
 
   function QuickActions() {
-    const secondaryCls =
-      'btn-lift flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 active:bg-gray-100 text-gray-700 font-semibold h-11 rounded-xl text-sm'
+    const secondaryCls = 'btn-lift flex items-center justify-center gap-2 bg-white border font-semibold rounded-xl text-[13px] transition-colors'
+    const secondaryStyle = { height: 44, borderColor: '#E8E8E6', color: '#444444' }
+
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="space-y-2.5 md:hidden">
         <button
           onClick={() => navigate('/jobs/new')}
-          className="btn-lift flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white font-semibold h-11 rounded-xl text-sm"
+          className="btn-lift w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark active:bg-primary-darker text-white font-semibold rounded-xl text-[13.5px]"
+          style={{ height: 48 }}
         >
           <Briefcase className="w-4 h-4" />
           Nytt jobb
         </button>
-        <button onClick={() => navigate('/quotes/new')} className={secondaryCls}>
-          <FileText className="w-4 h-4 text-gray-400" />
+        <div className="grid grid-cols-3 gap-2.5">
+          <button onClick={() => navigate('/quotes/new')} className={secondaryCls} style={secondaryStyle}>
+            <FileText className="w-[15px] h-[15px]" style={{ color: '#BBBBBB' }} />
+            Offert
+          </button>
+          <button onClick={() => navigate('/invoices/new')} className={secondaryCls} style={secondaryStyle}>
+            <Receipt className="w-[15px] h-[15px]" style={{ color: '#BBBBBB' }} />
+            Faktura
+          </button>
+          <button onClick={() => navigate('/customers/new')} className={secondaryCls} style={secondaryStyle}>
+            <UserPlus className="w-[15px] h-[15px]" style={{ color: '#BBBBBB' }} />
+            Kund
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  function DesktopQuickActions() {
+    const btnBase = 'btn-lift flex items-center justify-center gap-2 font-semibold rounded-xl text-[13px] h-10'
+    return (
+      <div className="hidden md:grid grid-cols-4 gap-3">
+        <button
+          onClick={() => navigate('/jobs/new')}
+          className={`${btnBase} bg-primary hover:bg-primary-dark text-white`}
+        >
+          <Briefcase className="w-4 h-4" />
+          Nytt jobb
+        </button>
+        <button onClick={() => navigate('/quotes/new')} className={`${btnBase} bg-white border text-[#444444]`} style={{ borderColor: '#E8E8E6' }}>
+          <FileText className="w-4 h-4" style={{ color: '#BBBBBB' }} />
           Ny offert
         </button>
-        <button onClick={() => navigate('/invoices/new')} className={secondaryCls}>
-          <Receipt className="w-4 h-4 text-gray-400" />
+        <button onClick={() => navigate('/invoices/new')} className={`${btnBase} bg-white border text-[#444444]`} style={{ borderColor: '#E8E8E6' }}>
+          <Receipt className="w-4 h-4" style={{ color: '#BBBBBB' }} />
           Ny faktura
         </button>
-        <button onClick={() => navigate('/customers/new')} className={secondaryCls}>
-          <UserPlus className="w-4 h-4 text-gray-400" />
+        <button onClick={() => navigate('/customers/new')} className={`${btnBase} bg-white border text-[#444444]`} style={{ borderColor: '#E8E8E6' }}>
+          <UserPlus className="w-4 h-4" style={{ color: '#BBBBBB' }} />
           Ny kund
         </button>
       </div>
@@ -246,49 +305,46 @@ export default function Dashboard() {
       )
     }
     return (
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         <div className="flex items-center justify-between px-0.5">
-          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+          <h2 className="text-[11.5px] font-semibold tracking-wider" style={{ color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             Senaste aktivitet
           </h2>
-          <Link to="/jobs" className="text-xs font-semibold text-primary inline-flex items-center gap-1 hover:text-primary-dark transition-colors">
+          <Link
+            to="/jobs"
+            className="text-[12.5px] font-medium inline-flex items-center gap-1 transition-colors"
+            style={{ color: '#0055FF' }}
+          >
             Visa alla
-            <ArrowRight className="w-3 h-3" />
+            <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
-        <div className="space-y-2">
-          {recentItems.map(item => {
+        <div className="row-list">
+          {recentItems.map((item, idx) => {
             const badgeCls = item.type === 'job'
               ? (JOB_BADGE[item.status] ?? JOB_BADGE.planerad)
               : (INV_BADGE[item.status] ?? INV_BADGE.obetald)
             const badgeLabel = item.type === 'job'
               ? (JOB_LABEL[item.status] ?? item.status)
               : (INV_LABEL[item.status] ?? item.status)
-            const TypeIcon = item.type === 'job' ? Briefcase : Receipt
             return (
               <Link
                 key={`${item.type}-${item.id}`}
                 to={item.path}
-                className="card-lift flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3 hover:border-gray-300 active:bg-gray-50"
+                className="row-item stagger-item px-4 py-[14px] gap-3"
+                style={{ animationDelay: `${idx * 35}ms` }}
               >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                  item.type === 'job' ? 'bg-blue-50' : 'bg-amber-50'
-                }`}>
-                  <TypeIcon className={`w-4 h-4 ${item.type === 'job' ? 'text-primary' : 'text-amber-600'}`} />
-                </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-800 text-sm truncate">{item.title}</p>
+                  <p className="font-semibold text-[13.5px] truncate" style={{ color: '#111111' }}>{item.title}</p>
                   {item.customer && (
-                    <p className="text-xs text-gray-400 mt-0.5 truncate">{item.customer}</p>
+                    <p className="text-[12px] mt-0.5 truncate" style={{ color: '#999999' }}>{item.customer}</p>
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                   {item.date && (
-                    <span className="text-xs text-gray-400">{formatDateShort(item.date)}</span>
+                    <span className="text-[11.5px]" style={{ color: '#AAAAAA' }}>{formatDateShort(item.date)}</span>
                   )}
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badgeCls}`}>
-                    {badgeLabel}
-                  </span>
+                  <span className={badgeCls}>{badgeLabel}</span>
                 </div>
               </Link>
             )
@@ -298,55 +354,42 @@ export default function Dashboard() {
     )
   }
 
-  function StatCards({ vertical = false }) {
+  function DesktopStatCards() {
     if (loading) {
       return (
-        <div className={vertical ? 'space-y-3' : 'grid grid-cols-3 gap-3'}>
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="rounded-xl p-5 animate-pulse space-y-3" style={{ background: '#1A1A1A', border: '1px solid #2A2A2A' }}>
-              <div className="h-8 w-10 rounded-xl" style={{ background: '#2A2A2A' }} />
-              <div className="h-3 w-full rounded-xl" style={{ background: '#2A2A2A' }} />
+        <div className="space-y-3">
+          {[0,1,2].map(i => (
+            <div key={i} className="rounded-2xl p-5 animate-pulse" style={{ background: '#1A1A1A', border: '1px solid #252525' }}>
+              <div className="h-8 w-10 rounded-xl mb-3" style={{ background: '#2A2A2A' }} />
+              <div className="h-3 w-full rounded-full" style={{ background: '#2A2A2A' }} />
             </div>
           ))}
         </div>
       )
     }
-    const cards = [
-      {
-        label: 'Aktiva jobb',
-        value: stats.activeJobs,
-        Icon: Briefcase,
-        iconColor: '#4D8EFF',
-        iconBg: 'rgba(0, 85, 255, 0.15)',
-        accentColor: '#0055FF',
-        valueColor: 'white',
-        path: '/jobs',
-      },
-      {
-        label: 'Obetalda fakturor',
-        value: stats.unpaidInvoices,
-        Icon: AlertCircle,
-        iconColor: '#F59E0B',
-        iconBg: 'rgba(217, 119, 6, 0.15)',
-        accentColor: '#D97706',
-        valueColor: stats.unpaidInvoices > 0 ? '#F59E0B' : 'white',
-        path: '/invoices',
-      },
-      {
-        label: 'Offerter väntar',
-        value: stats.pendingQuotes,
-        Icon: FileText,
-        iconColor: '#A78BFA',
-        iconBg: 'rgba(124, 58, 237, 0.15)',
-        accentColor: '#7C3AED',
-        valueColor: 'white',
-        path: '/quotes',
-      },
-    ]
     return (
-      <div className={vertical ? 'space-y-3' : 'grid grid-cols-3 gap-3'}>
-        {cards.map(c => (
-          <StatCard key={c.label} {...c} onClick={() => navigate(c.path)} />
+      <div className="space-y-3">
+        {statsCards.map(c => (
+          <button
+            key={c.label}
+            onClick={() => navigate(c.path)}
+            className="card-lift w-full rounded-2xl p-5 text-left"
+            style={{ background: '#151515', border: '1px solid #222222' }}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <p className="text-[11.5px] font-medium tracking-wide" style={{ color: '#555555', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                {c.label}
+              </p>
+              <ChevronRight className="w-3.5 h-3.5 mt-0.5" style={{ color: '#333333' }} />
+            </div>
+            <p
+              className="font-bold tabular-nums text-white"
+              style={{ fontSize: '2.25rem', letterSpacing: '-0.04em', lineHeight: 1 }}
+            >
+              {c.value}
+            </p>
+            <div className="mt-4 h-[2px] rounded-full" style={{ background: c.accentColor, opacity: 0.4, width: '100%' }} />
+          </button>
         ))}
       </div>
     )
@@ -354,8 +397,6 @@ export default function Dashboard() {
 
   return (
     <Page className="min-h-screen flex flex-col">
-
-      {/* First-login onboarding — covers the whole app until completed */}
       {showOnboarding && !loading && (
         <Onboarding
           onComplete={({ company_name, logo_url }) => {
@@ -366,92 +407,84 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Mobile header — hidden on desktop (sidebar handles navigation) */}
-      <header className="md:hidden bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between sticky top-0 z-10">
-        <span className="font-extrabold text-primary text-lg tracking-tight">Hantverksappen</span>
-        <div className="flex items-center gap-1">
+      {/* Mobile header */}
+      <header
+        className="md:hidden sticky top-0 z-10 px-4 h-[56px] flex items-center justify-between"
+        style={{ background: 'rgba(244,243,241,0.9)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
+      >
+        {logoUrl ? (
+          <img src={logoUrl} alt="Logotyp" className="object-contain" style={{ maxHeight: 28 }} />
+        ) : (
+          <span className="font-bold text-[15px]" style={{ color: '#111111', letterSpacing: '-0.02em' }}>
+            {loading ? 'Hantverksappen' : (companyName || 'Hantverksappen')}
+          </span>
+        )}
+        <div className="flex items-center gap-0.5">
           <button
             onClick={() => navigate('/settings')}
-            className="text-gray-400 hover:text-gray-700 transition-colors p-2 rounded-xl hover:bg-gray-50"
+            className="p-2 rounded-xl transition-colors"
+            style={{ color: '#AAAAAA' }}
             aria-label="Inställningar"
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-[19px] h-[19px]" />
           </button>
           <button
             onClick={handleSignOut}
-            className="text-gray-400 hover:text-danger transition-colors p-2 rounded-xl hover:bg-gray-50"
+            className="p-2 rounded-xl transition-colors"
+            style={{ color: '#AAAAAA' }}
             aria-label="Logga ut"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-[19px] h-[19px]" />
           </button>
         </div>
       </header>
 
-      {/* ── Mobile layout (single column) ─────────────────────────── */}
-      <div className="md:hidden flex flex-col flex-1" style={{ background: '#F8F8F8' }}>
-        <HeroSection />
-        <div className="max-w-lg mx-auto w-full px-4 py-5 space-y-5 flex-1">
-          {loading ? <StatCards /> : (
-            <>
-              <StatCards />
-              <QuickActions />
-              <RecentActivity />
-            </>
-          )}
+      {/* Mobile layout */}
+      <div className="md:hidden flex flex-col flex-1 px-4 py-4 space-y-4">
+        {/* Date greeting */}
+        <div>
+          <p className="text-[12px] font-medium" style={{ color: '#AAAAAA' }}>{todayLabel}</p>
+          <h1
+            className="font-bold text-[1.6rem] mt-0.5"
+            style={{ color: '#111111', letterSpacing: '-0.025em', lineHeight: 1.15 }}
+          >
+            {loading ? 'Hej' : (companyName ? `Hej, ${companyName}` : 'God dag')}
+          </h1>
         </div>
+
+        <RevenueHero />
+        <MobileStats />
+        <QuickActions />
+        <RecentActivity />
       </div>
 
-      {/* ── Desktop layout (two columns) ──────────────────────────── */}
-      <div className="hidden md:flex flex-1 gap-8 px-12 py-8" style={{ background: '#F8F8F8' }}>
-        {/* Left column */}
+      {/* Desktop layout */}
+      <div className="hidden md:flex flex-1 gap-7 px-10 py-8 max-w-[1400px] w-full">
         <div className="flex-1 min-w-0 space-y-6">
-          <div className="rounded-2xl overflow-hidden">
-            <HeroSection />
+          {/* Greeting */}
+          <div>
+            <p className="text-[12px] font-medium" style={{ color: '#AAAAAA' }}>{todayLabel}</p>
+            <h1
+              className="font-bold mt-0.5"
+              style={{ color: '#111111', fontSize: '1.75rem', letterSpacing: '-0.03em', lineHeight: 1.2 }}
+            >
+              {loading ? 'Hej' : (companyName ? `Hej, ${companyName}` : 'God dag')}
+            </h1>
           </div>
-          <div className="space-y-4">
-            <QuickActions />
-            <RecentActivity />
-          </div>
+
+          <RevenueHero />
+          <DesktopQuickActions />
+          <RecentActivity />
         </div>
 
-        {/* Right column — stat summary */}
-        <div className="w-72 flex-shrink-0">
-          <StatCards vertical />
+        {/* Right column */}
+        <div className="w-[260px] flex-shrink-0 space-y-4">
+          <p className="text-[11.5px] font-semibold tracking-wider" style={{ color: '#AAAAAA', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Översikt
+          </p>
+          <DesktopStatCards />
         </div>
       </div>
-
     </Page>
-  )
-}
-
-function StatCard({ label, value, Icon, iconColor, iconBg, accentColor, valueColor, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-xl p-5 text-left w-full cursor-pointer transition-colors duration-200"
-      style={{
-        background: '#1A1A1A',
-        border: '1px solid #2A2A2A',
-        borderBottom: `2px solid ${accentColor}`,
-      }}
-      onMouseEnter={e => e.currentTarget.style.background = '#222222'}
-      onMouseLeave={e => e.currentTarget.style.background = '#1A1A1A'}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <div
-          className="flex items-center justify-center flex-shrink-0"
-          style={{ width: 36, height: 36, borderRadius: '50%', background: iconBg }}
-        >
-          <Icon style={{ color: iconColor, width: 18, height: 18 }} strokeWidth={2} />
-        </div>
-        <span
-          className="text-3xl font-bold tabular-nums leading-none"
-          style={{ color: valueColor, letterSpacing: '-0.02em' }}
-        >
-          {value}
-        </span>
-      </div>
-      <p className="text-sm" style={{ color: '#888888' }}>{label}</p>
-    </button>
   )
 }

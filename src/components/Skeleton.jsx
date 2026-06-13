@@ -19,27 +19,27 @@ export function SkeletonCard() {
 
 export function SkeletonRow() {
   return (
-    <div className="flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3.5 animate-pulse">
-      <div className="w-10 h-10 rounded-full bg-[#E5E5E5] flex-shrink-0" />
+    <div className="flex items-center gap-3.5 bg-white px-4 py-[15px] animate-pulse">
       <div className="flex-1 space-y-2">
-        <div className="h-3.5 bg-[#E5E5E5] rounded-xl w-2/5" />
-        <div className="h-3 bg-[#E5E5E5] rounded-xl w-1/3" />
+        <div className="h-3.5 bg-[#EBEBEB] rounded-full w-2/5" />
+        <div className="h-3 bg-[#EBEBEB] rounded-full w-1/3" />
       </div>
-      <div className="w-4 h-4 bg-[#E5E5E5] rounded-xl flex-shrink-0" />
+      <div className="h-5 w-14 bg-[#EBEBEB] rounded-full flex-shrink-0" />
     </div>
   )
 }
 
-// SkeletonListRow — thinner row for list-style pages (Quotes, Invoices)
 export function SkeletonListRow() {
   return (
-    <div className="flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-4 py-4 animate-pulse">
+    <div className="flex items-center gap-3.5 bg-white px-4 py-[15px] animate-pulse">
       <div className="flex-1 space-y-2">
-        <div className="h-3.5 bg-[#E5E5E5] rounded-xl w-1/3" />
-        <div className="h-3 bg-[#E5E5E5] rounded-xl w-1/2" />
+        <div className="h-3.5 bg-[#EBEBEB] rounded-full w-1/3" />
+        <div className="h-3 bg-[#EBEBEB] rounded-full w-1/2" />
       </div>
-      <div className="h-5 w-14 bg-[#E5E5E5] rounded-full" />
-      <div className="w-4 h-4 bg-[#E5E5E5] rounded-xl" />
+      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+        <div className="h-5 w-16 bg-[#EBEBEB] rounded-full" />
+        <div className="h-3 w-12 bg-[#EBEBEB] rounded-full" />
+      </div>
     </div>
   )
 }
