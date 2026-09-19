@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
-import { ChevronLeft, Pencil, Play, CheckCircle, Receipt, Trash2, Loader2, User, CalendarDays, FileText, StickyNote, Link2 } from 'lucide-react'
+import { useAuth } from '../hooks/useAuth'
+import { ChevronLeft, Pencil, Play, CheckCircle, Receipt, Trash2, User, CalendarDays, FileText, StickyNote, Link2 } from 'lucide-react'
 import { SkeletonPage } from '../components/Skeleton'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
 import Page from '../components/Premium'
+import { useToast } from '../hooks/useToast'
+import { formatDate, parseDate, todayISO } from '../lib/date'
 
 const STATUS_CONFIG = {
   planerad: { label: 'Planerad', bg: 'bg-blue-50',  text: 'text-blue-700',  border: 'border-blue-100',  dot: 'bg-blue-400',  badge: 'bg-blue-100 text-blue-700' },
@@ -15,16 +17,17 @@ const STATUS_CONFIG = {
 
 function formatDateTime(date, time) {
   if (!date) return '–'
-  const d = new Intl.DateTimeFormat('sv-SE', {
+  const formatted = new Intl.DateTimeFormat('sv-SE', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-  }).format(new Date(date))
-  return time ? `${d} kl. ${time.slice(0, 5)}` : d
+  }).format(parseDate(date))
+  return time ? `${formatted} kl. ${time.slice(0, 5)}` : formatted
 }
 
 export default function JobDetail() {
   const { id } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const showToast = useToast()
 
   const [job, setJob] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -34,19 +37,27 @@ export default function JobDetail() {
   const { confirmDialog, confirm } = useConfirmDialog()
 
   useEffect(() => {
+    let active = true
+
     async function load() {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('jobs')
         .select('*, customers(*), quotes(id, quote_number)')
         .eq('id', id)
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
+      if (!active) return
 
-      if (error || !data) { navigate('/jobs'); return }
+      if (!data) {
+        navigate('/jobs', { replace: true })
+        return
+      }
       setJob(data)
       setLoading(false)
     }
+
     load()
+    return () => { active = false }
   }, [id, user.id, navigate])
 
   async function updateStatus(status) {
@@ -55,10 +66,10 @@ export default function JobDetail() {
     const patch = {
       status,
       updated_at: new Date().toISOString(),
-      ...(status === 'avslutad' ? { completed_date: new Date().toISOString().slice(0, 10) } : {}),
+      ...(status === 'avslutad' ? { completed_date: todayISO() } : {}),
     }
-    const { error } = await supabase.from('jobs').update(patch).eq('id', id).eq('user_id', user.id)
-    if (error) setError('Kunde inte uppdatera status. Försök igen.')
+    const { error: updateError } = await supabase.from('jobs').update(patch).eq('id', id).eq('user_id', user.id)
+    if (updateError) setError('Kunde inte uppdatera status. Försök igen.')
     else setJob(prev => ({ ...prev, ...patch }))
     setUpdating(false)
   }
@@ -70,9 +81,14 @@ export default function JobDetail() {
     )
     if (!ok) return
     setDeleting(true)
-    const { error } = await supabase.from('jobs').delete().eq('id', id).eq('user_id', user.id)
-    if (error) { setError('Kunde inte radera jobbet. Försök igen.'); setDeleting(false) }
-    else navigate('/jobs')
+    const { error: deleteError } = await supabase.from('jobs').delete().eq('id', id).eq('user_id', user.id)
+    if (deleteError) {
+      setError('Kunde inte radera jobbet. Försök igen.')
+      setDeleting(false)
+      return
+    }
+    showToast('Jobbet raderades', 'info')
+    navigate('/jobs')
   }
 
   if (loading) return <SkeletonPage />
@@ -140,9 +156,7 @@ export default function JobDetail() {
 
             {job.completed_date && (
               <DetailRow icon={<CheckCircle className="w-4 h-4 text-green-500" />} label="Avslutad">
-                <span className="text-sm text-gray-800">
-                  {new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(job.completed_date))}
-                </span>
+                <span className="text-sm text-gray-800">{formatDate(job.completed_date)}</span>
               </DetailRow>
             )}
 
@@ -155,7 +169,7 @@ export default function JobDetail() {
         </div>
 
         {error && (
-          <div className="bg-red-50 text-danger rounded-xl px-4 py-3 text-sm">{error}</div>
+          <div role="alert" className="bg-red-50 text-danger rounded-xl px-4 py-3 text-sm">{error}</div>
         )}
 
         {/* Status action buttons */}

@@ -1,10 +1,7 @@
 // Activity timeline — vertical line with dots, shown at the bottom of detail
 // pages. Events are derived from existing created_at / status / paid fields.
 
-function formatDate(iso) {
-  if (!iso) return ''
-  return new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(iso))
-}
+import { formatDate } from '../lib/date'
 
 // events: [{ label: string, date: ISO string, highlight?: boolean }]
 export default function ActivityLog({ events = [] }) {
@@ -21,7 +18,7 @@ export default function ActivityLog({ events = [] }) {
       ) : (
         <ol className="relative">
           {sorted.map((event, i) => (
-            <li key={i} className="relative pl-6 pb-5 last:pb-0">
+            <li key={`${event.date}-${event.label}`} className="relative pl-6 pb-5 last:pb-0">
               {/* vertical line */}
               {i < sorted.length - 1 && (
                 <span aria-hidden="true" className="absolute left-[5px] top-4 bottom-0 w-px bg-gray-200" />
@@ -37,7 +34,7 @@ export default function ActivityLog({ events = [] }) {
               />
               <p className="text-sm font-medium text-gray-800 leading-snug">{event.label}</p>
               {event.date && (
-                <p className="text-xs text-gray-400 mt-0.5">{formatDate(event.date)}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{formatDate(event.date, { fallback: '' })}</p>
               )}
             </li>
           ))}

@@ -5,10 +5,11 @@ import { format, parse, startOfWeek, getDay } from 'date-fns'
 import { sv } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import { SkeletonPage } from '../components/Skeleton'
 import { ChevronLeft } from 'lucide-react'
-import { Fx } from '../components/Premium'
+import Page from '../components/Premium'
+import { todayISO } from '../lib/date'
 
 // ── date-fns localizer with Swedish locale ───────────────────────────────────
 
@@ -67,7 +68,7 @@ const STATUS_COLOR = {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function jobToEvent(job) {
-  const dateStr = job.scheduled_date ?? new Date().toISOString().slice(0, 10)
+  const dateStr = job.scheduled_date ?? todayISO()
   const timeStr = job.scheduled_time ?? '08:00'
 
   const start = new Date(`${dateStr}T${timeStr}`)
@@ -137,8 +138,7 @@ export default function JobCalendar() {
   }
 
   return (
-    <div className="page-fade min-h-screen bg-gray-50 flex flex-col">
-      <Fx />
+    <Page className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         <button
@@ -273,6 +273,6 @@ export default function JobCalendar() {
           text-transform: capitalize;
         }
       `}</style>
-    </div>
+    </Page>
   )
 }

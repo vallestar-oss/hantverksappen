@@ -1,34 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import { ChevronLeft, Pencil, Phone, Mail, MapPin, StickyNote, Briefcase, ChevronRight, Plus, FileText, Receipt, Trash2 } from 'lucide-react'
 import { SkeletonPage } from '../components/Skeleton'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
-import { Fx } from '../components/Premium'
+import Page from '../components/Premium'
 import ActivityLog from '../components/ActivityLog'
-import { useToast } from '../components/Toast'
+import { useToast } from '../hooks/useToast'
+import { formatSEK } from '../lib/format'
+import { formatDate, todayISO } from '../lib/date'
+import { documentTotal } from '../utils/calc'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-
-function todayISO() { return new Date().toISOString().slice(0, 10) }
-
-function formatDate(iso) {
-  if (!iso) return '–'
-  return new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso))
-}
-
-function formatSEK(n) {
-  return new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 }).format(n ?? 0) + ' kr'
-}
-
-function calcTotal(items = [], rotRutEnabled = false) {
-  const subtotal = items.reduce((s, r) => s + (r.quantity ?? 0) * (r.unit_price ?? 0), 0)
-  const vat = items.reduce((s, r) => s + (r.quantity ?? 0) * (r.unit_price ?? 0) * ((r.vat_rate ?? 25) / 100), 0)
-  const labour = items.filter(r => r.type === 'arbete').reduce((s, r) => s + (r.quantity ?? 0) * (r.unit_price ?? 0), 0)
-  const deduction = rotRutEnabled ? labour * 0.3 : 0
-  return subtotal + vat - deduction
-}
 
 function effectiveInvoiceStatus(invoice) {
   if (invoice.status === 'obetald' && invoice.due_date && invoice.due_date < todayISO()) return 'försenad'
@@ -71,7 +55,7 @@ const INVOICE_LABEL = {
   utkast:   'Utkast',
   obetald:  'Obetald',
   betald:   'Betald',
-  försenad: 'Förfallen',
+  försenad: 'Försenad',
 }
 
 // ── skeleton row ──────────────────────────────────────────────────────────────
@@ -112,23 +96,33 @@ export default function CustomerDetail() {
 
   // Load customer
   useEffect(() => {
+    let active = true
+
     async function loadCustomer() {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('customers')
         .select('*')
         .eq('id', id)
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
+      if (!active) return
 
-      if (error || !data) { navigate('/customers'); return }
+      if (!data) {
+        navigate('/customers', { replace: true })
+        return
+      }
       setCustomer(data)
       setLoading(false)
     }
+
     loadCustomer()
+    return () => { active = false }
   }, [id, user.id, navigate])
 
   // Load history
   useEffect(() => {
+    let active = true
+
     async function loadHistory() {
       const [{ data: q }, { data: j }, { data: inv }] = await Promise.all([
         supabase
@@ -150,12 +144,15 @@ export default function CustomerDetail() {
           .eq('user_id', user.id)
           .order('invoice_date', { ascending: false }),
       ])
+      if (!active) return
       setQuotes(q ?? [])
       setJobs(j ?? [])
       setInvoices(inv ?? [])
       setHistoryLoading(false)
     }
+
     loadHistory()
+    return () => { active = false }
   }, [id, user.id])
 
   async function handleDeleteCustomer() {
@@ -195,8 +192,7 @@ export default function CustomerDetail() {
   return (
     <>
       {confirmDialog}
-    <div className="page-fade min-h-screen pb-20" style={{ background: '#F8F8F8' }}>
-      <Fx />
+    <Page className="min-h-screen pb-20" style={{ background: '#F8F8F8' }}>
 
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
@@ -365,7 +361,7 @@ export default function CustomerDetail() {
         )}
 
         {deleteError && (
-          <div className="bg-red-50 text-red-600 rounded-xl px-4 py-3 text-sm">{deleteError}</div>
+          <div role="alert" className="bg-red-50 text-red-600 rounded-xl px-4 py-3 text-sm">{deleteError}</div>
         )}
 
         {/* Delete customer */}
@@ -378,7 +374,7 @@ export default function CustomerDetail() {
           {deleting ? 'Raderar…' : 'Radera kund'}
         </button>
       </div>
-    </div>
+    </Page>
     </>
   )
 }
@@ -407,7 +403,7 @@ function QuotesTab({ quotes, loading, onRow, onNew }) {
   return (
     <ul>
       {quotes.map(q => {
-        const total = calcTotal(q.quote_items, q.rot_rut_enabled)
+        const total = documentTotal(q.quote_items, q.rot_rut_enabled)
         const status = q.status ?? 'utkast'
         return (
           <li key={q.id}>
@@ -420,7 +416,7 @@ function QuotesTab({ quotes, loading, onRow, onNew }) {
                   {q.quote_number ?? '–'}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {formatDate(q.created_at)} · {formatSEK(total)}
+                  {formatDate(q.created_at, { style: 'medium' })} · {formatSEK(total, { max: 0 })}
                 </p>
               </div>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${QUOTE_BADGE[status] ?? QUOTE_BADGE.utkast}`}>
@@ -462,7 +458,7 @@ function JobsTab({ jobs, loading, onRow }) {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-gray-800 truncate">{j.title ?? '–'}</p>
                 {j.scheduled_date && (
-                  <p className="text-xs text-gray-400 mt-0.5">{formatDate(j.scheduled_date)}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{formatDate(j.scheduled_date, { style: 'medium' })}</p>
                 )}
               </div>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${JOB_BADGE[status] ?? JOB_BADGE.planerad}`}>
@@ -501,7 +497,7 @@ function InvoicesTab({ invoices, loading, onRow, onNew }) {
   return (
     <ul>
       {invoices.map(inv => {
-        const total = calcTotal(inv.invoice_items, inv.rot_rut_enabled)
+        const total = documentTotal(inv.invoice_items, inv.rot_rut_enabled)
         const status = effectiveInvoiceStatus(inv)
         return (
           <li key={inv.id}>
@@ -514,9 +510,9 @@ function InvoicesTab({ invoices, loading, onRow, onNew }) {
                   {inv.invoice_number ?? '–'}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {formatDate(inv.invoice_date)}
-                  {inv.due_date ? ` · Förfaller ${formatDate(inv.due_date)}` : ''}
-                  {' · '}{formatSEK(total)}
+                  {formatDate(inv.invoice_date, { style: 'medium' })}
+                  {inv.due_date ? ` · Förfaller ${formatDate(inv.due_date, { style: 'medium' })}` : ''}
+                  {' · '}{formatSEK(total, { max: 0 })}
                 </p>
               </div>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${INVOICE_BADGE[status] ?? INVOICE_BADGE.obetald}`}>

@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import Page from '../components/Premium'
 import EmptyState from '../components/EmptyState'
-import { Calendar, Plus, ChevronRight } from 'lucide-react'
+import { Calendar, Plus } from 'lucide-react'
 import { SkeletonRow } from '../components/Skeleton'
+import { useToast } from '../hooks/useToast'
+import { formatDate } from '../lib/date'
 
 const STATUSES = [
   { key: 'alla',     label: 'Alla' },
@@ -26,30 +28,32 @@ const STATUS_LABEL = {
   avslutad: 'Avslutad',
 }
 
-function formatDate(iso) {
-  if (!iso) return ''
-  return new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'short' }).format(new Date(iso))
-}
-
 export default function Jobs() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const showToast = useToast()
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState('pågående')
 
   useEffect(() => {
+    let active = true
+
     async function fetchJobs() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('jobs')
         .select('*, customers(name)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
+      if (!active) return
+      if (error) showToast('Kunde inte hämta jobb. Ladda om sidan.', 'error')
       setJobs(data ?? [])
       setLoading(false)
     }
+
     fetchJobs()
-  }, [user.id])
+    return () => { active = false }
+  }, [user.id, showToast])
 
   const filtered = useMemo(() => {
     if (activeFilter === 'alla') return jobs
@@ -157,7 +161,7 @@ export default function Jobs() {
                       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                         {job.scheduled_date && (
                           <span className="text-[11.5px]" style={{ color: '#AAAAAA' }}>
-                            {formatDate(job.scheduled_date)}
+                            {formatDate(job.scheduled_date, { style: 'short', fallback: '' })}
                           </span>
                         )}
                         <span className={BADGE_CLS[status] ?? BADGE_CLS.planerad}>
@@ -199,7 +203,7 @@ export default function Jobs() {
                             {job.title ?? 'Namnlöst jobb'}
                           </td>
                           <td className="px-5 py-4" style={{ color: '#777777' }}>{job.customers?.name ?? ''}</td>
-                          <td className="px-5 py-4" style={{ color: '#999999' }}>{formatDate(job.scheduled_date)}</td>
+                          <td className="px-5 py-4" style={{ color: '#999999' }}>{formatDate(job.scheduled_date, { style: 'short', fallback: '' })}</td>
                           <td className="px-5 py-4">
                             <span className={BADGE_CLS[status] ?? BADGE_CLS.planerad}>
                               {STATUS_LABEL[status] ?? status}

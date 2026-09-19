@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, Link } from 'react-router-dom'
 import { Home, Users, FileText, Briefcase, Receipt, Settings, LogOut, Calendar, Wrench, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import BottomNav from './BottomNav'
@@ -81,13 +81,14 @@ export default function Layout({ children }) {
           </div>
 
           {/* Nav items */}
-          <nav className="flex-1 py-2 px-3 overflow-y-auto" style={{ gap: 2, display: 'flex', flexDirection: 'column' }}>
+          <nav aria-label="Huvudmeny" className="flex-1 py-2 px-3 overflow-y-auto" style={{ gap: 2, display: 'flex', flexDirection: 'column' }}>
             {NAV_ITEMS.map(({ label, path, Icon }) => {
               const active = isActive(path)
               return (
-                <button
+                <Link
                   key={path}
-                  onClick={() => navigate(path)}
+                  to={path}
+                  aria-current={active ? 'page' : undefined}
                   className="group w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all relative"
                   style={{
                     color: active ? '#FFFFFF' : '#666666',
@@ -108,15 +109,16 @@ export default function Layout({ children }) {
                     strokeWidth={active ? 2.5 : 2}
                   />
                   {label}
-                </button>
+                </Link>
               )
             })}
           </nav>
 
           {/* Bottom — settings + logout */}
           <div className="px-3 pb-5 pt-2 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <button
-              onClick={() => navigate('/settings')}
+            <Link
+              to="/settings"
+              aria-current={location.pathname === '/settings' ? 'page' : undefined}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all"
               style={{
                 color: location.pathname === '/settings' ? '#FFFFFF' : '#666666',
@@ -127,7 +129,7 @@ export default function Layout({ children }) {
             >
               <Settings style={{ width: 15, height: 15, flexShrink: 0 }} strokeWidth={2} />
               Inställningar
-            </button>
+            </Link>
             <button
               onClick={handleSignOut}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all mt-0.5"
@@ -142,9 +144,9 @@ export default function Layout({ children }) {
         </aside>
 
         {/* ── Main content ──────────────────────────────────────────────── */}
-        <div className="flex-1 md:ml-[248px] flex flex-col min-h-screen pb-[62px] md:pb-0 bg-[#F4F3F1]">
+        <main className="flex-1 md:ml-[248px] flex flex-col min-h-screen pb-[62px] md:pb-0 bg-[#F4F3F1]">
           {children}
-        </div>
+        </main>
 
         {/* ── Bottom nav — mobile only ──────────────────────────────────── */}
         <div className="md:hidden">

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 export default function ConfirmDialog({
   isOpen,
@@ -9,7 +9,14 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }) {
-  // Close on Escape
+  const cancelRef = useRef(null)
+
+  // Move focus into the dialog, starting on the safe action.
+  useEffect(() => {
+    if (isOpen) cancelRef.current?.focus()
+  }, [isOpen])
+
+  // Close on Escape.
   useEffect(() => {
     if (!isOpen) return
     function onKey(e) {
@@ -23,8 +30,7 @@ export default function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ animation: 'fadeIn 200ms ease' }}
+      className="fade-in fixed inset-0 z-50 flex items-center justify-center p-4"
     >
       {/* Overlay */}
       <div
@@ -34,16 +40,23 @@ export default function ConfirmDialog({
       />
 
       {/* Dialog */}
-      <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
+        aria-describedby={message ? 'confirm-message' : undefined}
+        className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4"
+      >
         <div>
-          <h2 className="font-bold text-lg" style={{ color: '#111111' }}>{title}</h2>
+          <h2 id="confirm-title" className="font-bold text-lg" style={{ color: '#111111' }}>{title}</h2>
           {message && (
-            <p className="text-sm mt-2 leading-relaxed" style={{ color: '#666666' }}>{message}</p>
+            <p id="confirm-message" className="text-sm mt-2 leading-relaxed" style={{ color: '#666666' }}>{message}</p>
           )}
         </div>
 
         <div className="flex justify-end gap-3 pt-1">
           <button
+            ref={cancelRef}
             type="button"
             onClick={onCancel}
             className="h-11 px-6 rounded-xl border font-semibold text-sm transition-all duration-200 hover:bg-gray-50 active:bg-gray-100"
@@ -64,7 +77,6 @@ export default function ConfirmDialog({
         </div>
       </div>
 
-      <style>{`@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }`}</style>
     </div>
   )
 }

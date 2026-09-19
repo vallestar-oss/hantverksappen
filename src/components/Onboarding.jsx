@@ -1,27 +1,18 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
+import { uploadLogo, storableLogoUrl } from '../lib/logo'
+import { markOnboardingDone } from '../lib/onboarding'
+import { useAuth } from '../hooks/useAuth'
 import { Noise } from './Premium'
+import { Field, labelClass } from './FormField'
 import {
-  Wrench, ArrowRight, UserPlus, FileText, Compass, ChevronRight,
+  Wrench, ArrowRight, UserPlus, FileText, Briefcase, ChevronRight,
   ImagePlus, Loader2, CheckCircle,
 } from 'lucide-react'
 
 // First-login onboarding — shown when no company profile exists yet.
 // Three steps: welcome → company info → done. Never shown again afterwards.
-
-const ONBOARDING_CSS = `
-@keyframes onboarding-step {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.onboarding-step { animation: onboarding-step 250ms ease both; }
-`
-
-export function onboardingDoneKey(userId) {
-  return `hv_onboarded_${userId}`
-}
 
 export default function Onboarding({ onComplete }) {
   const { user } = useAuth()
@@ -41,15 +32,13 @@ export default function Onboarding({ onComplete }) {
 
   async function handleLogoUpload(e) {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
     setUploading(true)
     setError('')
-    const ext = file.name.split('.').pop()
-    const path = `${user.id}/logo.${ext}`
-    const { error: uploadError } = await supabase.storage.from('logos').upload(path, file, { upsert: true })
-    if (uploadError) { setError('Kunde inte ladda upp logotypen. Du kan göra det senare under Inställningar.'); setUploading(false); return }
-    const { data } = supabase.storage.from('logos').getPublicUrl(path)
-    setForm(prev => ({ ...prev, logo_url: `${data.publicUrl}?t=${Date.now()}` }))
+    const { url, error: uploadError } = await uploadLogo(user.id, file)
+    if (uploadError) setError(`${uploadError} Du kan göra det senare under Inställningar.`)
+    else setForm(prev => ({ ...prev, logo_url: url }))
     setUploading(false)
   }
 
@@ -64,7 +53,7 @@ export default function Onboarding({ onComplete }) {
       org_number: form.org_number.trim() || null,
       phone: form.phone.trim() || null,
       email: form.email.trim() || null,
-      logo_url: form.logo_url.split('?')[0] || null,
+      logo_url: storableLogoUrl(form.logo_url),
       updated_at: new Date().toISOString(),
     }
     const { error: saveError } = await supabase
@@ -75,20 +64,19 @@ export default function Onboarding({ onComplete }) {
       setSaving(false)
       return
     }
-    localStorage.setItem(onboardingDoneKey(user.id), '1')
+    markOnboardingDone(user.id)
     setSaving(false)
     setStep(3)
   }
 
   function finish(path) {
-    localStorage.setItem(onboardingDoneKey(user.id), '1')
-    onComplete({ company_name: form.company_name.trim(), logo_url: form.logo_url.split('?')[0] || '' })
+    markOnboardingDone(user.id)
+    onComplete({ company_name: form.company_name.trim(), logo_url: storableLogoUrl(form.logo_url) ?? '' })
     if (path) navigate(path)
   }
 
   return (
     <div className="fixed inset-0 z-40 overflow-y-auto" style={{ background: '#111111' }}>
-      <style>{ONBOARDING_CSS}</style>
       <Noise />
       {/* blue glow */}
       <div
@@ -177,11 +165,11 @@ export default function Onboarding({ onComplete }) {
 
               {/* Optional logo */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Logotyp <span className="text-gray-400 font-normal">(valfritt)</span></label>
+                <span className={labelClass}>Logotyp <span className="text-gray-400 font-normal">(valfritt)</span></span>
                 {form.logo_url && (
                   <img src={form.logo_url} alt="Logotyp" className="h-14 object-contain rounded-xl border border-gray-200 mb-2" />
                 )}
-                <input ref={fileRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+                <input ref={fileRef} type="file" accept="image/png,image/jpeg" onChange={handleLogoUpload} className="hidden" aria-label="Välj logotyp" />
                 <button
                   type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
                   className="w-full flex items-center justify-center gap-2 border border-gray-200 rounded-xl h-11 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-60"
@@ -192,7 +180,7 @@ export default function Onboarding({ onComplete }) {
               </div>
             </div>
 
-            {error && <p className="text-sm text-red-300 mt-3 px-1">{error}</p>}
+            {error && <p role="alert" className="text-sm text-red-300 mt-3 px-1">{error}</p>}
 
             <button
               type="submit" disabled={saving || uploading}
@@ -229,9 +217,9 @@ export default function Onboarding({ onComplete }) {
                 onClick={() => finish('/quotes/new')}
               />
               <QuickStartCard
-                Icon={Compass}
-                label="Se en rundtur"
-                onClick={() => finish(null)}
+                Icon={Briefcase}
+                label="Planera ditt första jobb"
+                onClick={() => finish('/jobs/new')}
               />
             </div>
 
@@ -250,15 +238,6 @@ export default function Onboarding({ onComplete }) {
 
 const inputClass =
   'w-full border border-gray-200 rounded-xl px-4 h-11 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all'
-
-function Field({ label, children }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
-      {children}
-    </div>
-  )
-}
 
 function QuickStartCard({ Icon, label, onClick }) {
   return (

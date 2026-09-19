@@ -1,24 +1,17 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import Page from '../components/Premium'
 import EmptyState from '../components/EmptyState'
 import { Plus, Check } from 'lucide-react'
 import { SkeletonListRow } from '../components/Skeleton'
+import { useToast } from '../hooks/useToast'
+import { formatSEK } from '../lib/format'
+import { formatDate, todayISO } from '../lib/date'
+import { documentTotal } from '../utils/calc'
 
 // ── helpers ────────────────────────────────────────────────────────────────
-
-function formatSEK(n) {
-  return new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 }).format(n ?? 0) + ' kr'
-}
-
-function formatDate(iso) {
-  if (!iso) return ''
-  return new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'short' }).format(new Date(iso))
-}
-
-function todayISO() { return new Date().toISOString().slice(0, 10) }
 
 function effectiveStatus(invoice) {
   if (invoice.status === 'obetald' && invoice.due_date && invoice.due_date < todayISO()) return 'försenad'
@@ -45,22 +38,29 @@ const FILTERS = [
 export default function Invoices() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const showToast = useToast()
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState('obetald')
 
   useEffect(() => {
+    let active = true
+
     async function fetchInvoices() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('invoices')
-        .select('*, customers(name), invoice_items(unit_price, quantity)')
+        .select('*, customers(name), invoice_items(type, unit_price, quantity, vat_rate)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
+      if (!active) return
+      if (error) showToast('Kunde inte hämta fakturor. Ladda om sidan.', 'error')
       setInvoices(data ?? [])
       setLoading(false)
     }
+
     fetchInvoices()
-  }, [user.id])
+    return () => { active = false }
+  }, [user.id, showToast])
 
   const filtered = useMemo(() => {
     return invoices.filter(inv => {
@@ -68,12 +68,6 @@ export default function Invoices() {
       return effectiveStatus(inv) === activeFilter
     })
   }, [invoices, activeFilter])
-
-  function getTotal(inv) {
-    return (inv.invoice_items ?? []).reduce(
-      (s, item) => s + (Number(item.unit_price) || 0) * (Number(item.quantity) || 0), 0
-    )
-  }
 
   return (
     <Page className="min-h-screen flex flex-col pb-20 md:pb-0">
@@ -147,7 +141,7 @@ export default function Invoices() {
                 {filtered.map((inv, idx) => {
                   const status = effectiveStatus(inv)
                   const badge = BADGE[status] ?? BADGE.obetald
-                  const total = getTotal(inv)
+                  const total = documentTotal(inv.invoice_items, inv.rot_rut_enabled)
                   return (
                     <button
                       key={inv.id}
@@ -165,7 +159,7 @@ export default function Invoices() {
                       </div>
                       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                         <span className="font-bold text-[13.5px] tabular-nums" style={{ color: '#111111' }}>
-                          {formatSEK(total)}
+                          {formatSEK(total, { max: 0 })}
                         </span>
                         <span className={badge.cls}>
                           {status === 'betald' && <Check style={{ width: 9, height: 9 }} strokeWidth={3} />}
@@ -173,7 +167,7 @@ export default function Invoices() {
                         </span>
                         {inv.due_date && (
                           <span className="text-[11px]" style={{ color: '#BBBBBB' }}>
-                            {formatDate(inv.due_date)}
+                            {formatDate(inv.due_date, { style: 'short', fallback: '' })}
                           </span>
                         )}
                       </div>
@@ -201,7 +195,7 @@ export default function Invoices() {
                     {filtered.map((inv, i) => {
                       const status = effectiveStatus(inv)
                       const badge = BADGE[status] ?? BADGE.obetald
-                      const total = getTotal(inv)
+                      const total = documentTotal(inv.invoice_items, inv.rot_rut_enabled)
                       return (
                         <tr
                           key={inv.id}
@@ -215,9 +209,9 @@ export default function Invoices() {
                             #{inv.invoice_number ?? ''}
                           </td>
                           <td className="px-5 py-4" style={{ color: '#777777' }}>{inv.customers?.name ?? ''}</td>
-                          <td className="px-5 py-4" style={{ color: '#999999' }}>{formatDate(inv.due_date)}</td>
+                          <td className="px-5 py-4" style={{ color: '#999999' }}>{formatDate(inv.due_date, { style: 'short', fallback: '' })}</td>
                           <td className="px-5 py-4 text-right font-semibold tabular-nums" style={{ color: '#111111' }}>
-                            {formatSEK(total)}
+                            {formatSEK(total, { max: 0 })}
                           </td>
                           <td className="px-5 py-4">
                             <span className={badge.cls}>

@@ -2,56 +2,41 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { SkeletonPage } from '../components/Skeleton'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
-import { generateQuotePDF } from '../utils/generateQuotePDF'
+import { useAuth } from '../hooks/useAuth'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
+import { useToast } from '../hooks/useToast'
 import Page, { Noise } from '../components/Premium'
 import ActivityLog from '../components/ActivityLog'
-import { useToast } from '../components/Toast'
+import { TotalsBody } from '../components/DocumentBuilder'
+import { formatSEK } from '../lib/format'
+import { formatDate } from '../lib/date'
+import { calcTotals, lineNet, rotRutLabel } from '../utils/calc'
 import {
   ChevronLeft, Pencil, PencilLine, Send, CheckCircle, XCircle,
   Phone, Mail, MapPin, Download, Briefcase, Trash2, Loader2, Check,
 } from 'lucide-react'
 
-// ── helpers ────────────────────────────────────────────────────────────────
-
-function formatSEK(n) {
-  return new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 2 }).format(n ?? 0) + ' kr'
-}
-
-function formatDate(iso) {
-  if (!iso) return '–'
-  return new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(iso))
-}
+// ── status config ──────────────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
-  utkast:  { label: 'Utkast',   bg: 'bg-gray-100',   text: 'text-gray-600',  border: 'border-gray-200', icon: DraftIcon },
-  skickad: { label: 'Skickad',  bg: 'bg-blue-50',    text: 'text-blue-600',  border: 'border-blue-100', icon: SentIcon },
-  godkänd: { label: 'Godkänd', bg: 'bg-green-50',   text: 'text-success',   border: 'border-green-100', icon: ApprovedIcon },
-  avvisad: { label: 'Avvisad', bg: 'bg-red-50',     text: 'text-danger',    border: 'border-red-100',  icon: RejectedIcon },
+  utkast:  { label: 'Utkast'  },
+  skickad: { label: 'Skickad' },
+  godkänd: { label: 'Godkänd' },
+  avvisad: { label: 'Avvisad' },
 }
-
-const VAT_RATES = [25, 12, 6]
-
-// ── icons (Lucide, consistent with the rest of the app) ─────────────────────
-
-function DraftIcon()    { return <PencilLine className="w-5 h-5" /> }
-function SentIcon()     { return <Send className="w-5 h-5" /> }
-function ApprovedIcon() { return <CheckCircle className="w-5 h-5" /> }
-function RejectedIcon() { return <XCircle className="w-5 h-5" /> }
 
 // ── sub-components ─────────────────────────────────────────────────────────
 
 function Card({ title, children }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       {title && (
         <div className="px-5 pt-4 pb-3 border-b border-gray-100">
           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{title}</h2>
         </div>
       )}
       <div className="p-5 space-y-3">{children}</div>
-    </div>
+    </section>
   )
 }
 
@@ -60,15 +45,6 @@ function DetailRow({ label, value }) {
     <div className="flex justify-between items-start gap-4">
       <span className="text-sm text-gray-400 flex-shrink-0">{label}</span>
       <span className="text-sm text-gray-800 text-right font-medium">{value ?? '–'}</span>
-    </div>
-  )
-}
-
-function SummaryRow({ label, value, valueClass = 'text-gray-700', bold = false }) {
-  return (
-    <div className="flex justify-between items-baseline">
-      <span className={`text-sm ${bold ? 'font-bold text-gray-800' : 'text-gray-500'}`}>{label}</span>
-      <span className={`text-sm font-medium tabular-nums ${valueClass} ${bold ? 'font-bold' : ''}`}>{value}</span>
     </div>
   )
 }
@@ -91,56 +67,41 @@ export default function QuoteDetail() {
   const { confirmDialog, confirm } = useConfirmDialog()
 
   useEffect(() => {
+    let active = true
+
     async function load() {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('quotes')
         .select('*, customers(*), quote_items(*)')
         .eq('id', id)
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
+      if (!active) return
 
-      if (error || !data) {
-        navigate('/quotes')
+      if (!data) {
+        navigate('/quotes', { replace: true })
         return
       }
       setQuote(data)
       setLoading(false)
     }
+
     load()
+    return () => { active = false }
   }, [id, user.id, navigate])
 
-  // Saved from edit/create flow — show as toast, then clear the state
+  // Arrived from the edit flow — confirm with a toast, then clear the navigation state.
   useEffect(() => {
     if (location.state?.saved === true) {
       showToast('Offerten sparades', 'success')
-      window.history.replaceState({}, '')
+      navigate(location.pathname, { replace: true, state: null })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [location, navigate, showToast])
 
-  const calc = useMemo(() => {
-    if (!quote) return {}
-    const items = quote.quote_items ?? []
-
-    const subtotal = items.reduce((s, r) => s + (r.quantity ?? 0) * (r.unit_price ?? 0), 0)
-    const labourSubtotal = items
-      .filter(r => r.type === 'arbete')
-      .reduce((s, r) => s + (r.quantity ?? 0) * (r.unit_price ?? 0), 0)
-
-    const rotRutDeduction = quote.rot_rut_enabled ? labourSubtotal * 0.3 : 0
-
-    const vatByRate = {}
-    for (const r of items) {
-      const net = (r.quantity ?? 0) * (r.unit_price ?? 0)
-      vatByRate[r.vat_rate] = (vatByRate[r.vat_rate] ?? 0) + net * ((r.vat_rate ?? 25) / 100)
-    }
-
-    const totalVat = Object.values(vatByRate).reduce((s, v) => s + v, 0)
-    const totalInkMoms = subtotal + totalVat
-    const toPay = totalInkMoms - rotRutDeduction
-
-    return { subtotal, labourSubtotal, rotRutDeduction, vatByRate, totalVat, totalInkMoms, toPay }
-  }, [quote])
+  const calc = useMemo(
+    () => calcTotals(quote?.quote_items, quote?.rot_rut_enabled),
+    [quote],
+  )
 
   async function updateStatus(status) {
     setUpdating(true)
@@ -153,7 +114,7 @@ export default function QuoteDetail() {
 
     if (error) {
       setError('Kunde inte uppdatera status. Försök igen.')
-      showToast('Något gick fel', 'error')
+      showToast('Något gick fel. Försök igen.', 'error')
       setUpdating(false)
     } else {
       setQuote(prev => ({ ...prev, status, updated_at: new Date().toISOString() }))
@@ -192,21 +153,14 @@ export default function QuoteDetail() {
     setPdfLoading(true)
     setError('')
     try {
-      const { data: profile } = await supabase
-        .from('company_profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
-
-      await generateQuotePDF(
-        quote,
-        quote.quote_items ?? [],
-        quote.customers ?? {},
-        profile ?? {}
-      )
-    } catch (e) {
-      console.error('PDF error:', e)
-      setError('Kunde inte generera PDF. Försök igen.')
+      const [{ data: profile }, { generateQuotePDF }] = await Promise.all([
+        supabase.from('company_profiles').select('*').eq('user_id', user.id).maybeSingle(),
+        // jsPDF is large, so it is only fetched when a PDF is actually requested.
+        import('../utils/generateQuotePDF'),
+      ])
+      await generateQuotePDF(quote, quote.quote_items ?? [], quote.customers ?? {}, profile ?? {})
+    } catch {
+      setError('Kunde inte skapa PDF:en. Försök igen.')
     } finally {
       setPdfLoading(false)
     }
@@ -332,7 +286,7 @@ export default function QuoteDetail() {
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-400">Avdrag</span>
               <span className="text-xs font-semibold px-2.5 py-1 bg-green-100 text-success rounded-full uppercase">
-                {quote.rot_rut_type ?? 'ROT/RUT'}
+                {quote.rot_rut_type ? rotRutLabel(quote.rot_rut_type) : 'ROT/RUT'}
               </span>
             </div>
           )}
@@ -349,7 +303,7 @@ export default function QuoteDetail() {
           <Card title="Rader">
             <div className="space-y-0 -mx-5 -mt-3 -mb-5">
               {items.map((item, i) => {
-                const rowTotal = (item.quantity ?? 0) * (item.unit_price ?? 0)
+                const rowTotal = lineNet(item)
                 return (
                   <div
                     key={item.id}
@@ -375,7 +329,7 @@ export default function QuoteDetail() {
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-400">
                         {item.quantity} {item.unit} × {formatSEK(item.unit_price)}
-                        <span className="ml-2 text-xs text-gray-300">moms {item.vat_rate}%</span>
+                        <span className="ml-2 text-xs text-gray-300">moms {item.vat_rate ?? 25} %</span>
                       </span>
                       <span className="font-semibold text-gray-700 tabular-nums">{formatSEK(rowTotal)}</span>
                     </div>
@@ -388,38 +342,7 @@ export default function QuoteDetail() {
 
         {/* Summary card */}
         <Card title="Sammanställning">
-          <SummaryRow label="Delsumma ex. moms" value={formatSEK(calc.subtotal)} />
-
-          {quote.rot_rut_enabled && calc.rotRutDeduction > 0 && (
-            <SummaryRow
-              label={`${(quote.rot_rut_type ?? 'rot').toUpperCase()}-avdrag (30% av arbete)`}
-              value={`− ${formatSEK(calc.rotRutDeduction)}`}
-              valueClass="text-success font-semibold"
-            />
-          )}
-
-          <div className="border-t border-gray-200 pt-3 mt-1 space-y-2">
-            {VAT_RATES.filter(r => (calc.vatByRate?.[r] ?? 0) > 0).map(r => (
-              <SummaryRow key={r} label={`Moms ${r}%`} value={formatSEK(calc.vatByRate[r])} />
-            ))}
-          </div>
-
-          <div className="border-t border-gray-200 pt-3 mt-1">
-            <SummaryRow label="Totalt ink. moms" value={formatSEK(calc.totalInkMoms)} />
-          </div>
-
-          {/* Total — distinct dark surface */}
-          <div className="relative overflow-hidden rounded-xl mt-3 -mx-1" style={{ background: '#111111' }}>
-            <Noise />
-            <div className="relative px-4 py-4 flex justify-between items-center gap-3">
-              <span className="font-semibold text-white text-sm">
-                {quote.rot_rut_enabled ? 'Att betala efter ROT/RUT' : 'Att betala'}
-              </span>
-              <span className="font-extrabold text-white text-2xl tabular-nums" style={{ letterSpacing: '-0.02em' }}>
-                {formatSEK(calc.toPay)}
-              </span>
-            </div>
-          </div>
+          <TotalsBody totals={calc} rotRutEnabled={quote.rot_rut_enabled} rotRutType={quote.rot_rut_type} />
         </Card>
 
         {/* PDF download */}
@@ -442,7 +365,7 @@ export default function QuoteDetail() {
         </button>
 
         {/* Action buttons */}
-        {error && <p className="text-sm text-danger px-1">{error}</p>}
+        {error && <p role="alert" className="text-sm text-danger px-1">{error}</p>}
 
         <ActionButtons status={status} updating={updating} onUpdate={updateStatus} quoteId={id} />
 
@@ -481,14 +404,14 @@ function ActionButtons({ status, updating, onUpdate, quoteId }) {
       <div className="space-y-3">
         <ActionBtn
           label="Skicka offert"
-          icon={<SentIcon />}
+          icon={<Send className="w-5 h-5" />}
           className="bg-primary hover:bg-primary-dark text-white"
           onClick={() => onUpdate('skickad')}
           disabled={updating}
         />
         <ActionBtn
           label="Markera som godkänd"
-          icon={<ApprovedIcon />}
+          icon={<CheckCircle className="w-5 h-5" />}
           className="bg-success hover:bg-green-700 text-white"
           onClick={() => onUpdate('godkänd')}
           disabled={updating}
@@ -502,14 +425,14 @@ function ActionButtons({ status, updating, onUpdate, quoteId }) {
       <div className="space-y-3">
         <ActionBtn
           label="Markera som godkänd"
-          icon={<ApprovedIcon />}
+          icon={<CheckCircle className="w-5 h-5" />}
           className="bg-success hover:bg-green-700 text-white"
           onClick={() => onUpdate('godkänd')}
           disabled={updating}
         />
         <ActionBtn
           label="Markera som avvisad"
-          icon={<RejectedIcon />}
+          icon={<XCircle className="w-5 h-5" />}
           className="bg-white border border-danger/40 text-danger hover:bg-red-50"
           onClick={() => onUpdate('avvisad')}
           disabled={updating}
@@ -522,9 +445,7 @@ function ActionButtons({ status, updating, onUpdate, quoteId }) {
     return (
       <ActionBtn
         label="Skapa jobb"
-        icon={
-          <Briefcase className="w-5 h-5" />
-        }
+        icon={<Briefcase className="w-5 h-5" />}
         className="bg-primary hover:bg-primary-dark text-white"
         onClick={() => navigate(`/jobs/new?quote_id=${quoteId}`)}
         disabled={updating}
@@ -536,7 +457,7 @@ function ActionButtons({ status, updating, onUpdate, quoteId }) {
     return (
       <ActionBtn
         label="Återöppna som utkast"
-        icon={<DraftIcon />}
+        icon={<PencilLine className="w-5 h-5" />}
         className="bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
         onClick={() => onUpdate('utkast')}
         disabled={updating}

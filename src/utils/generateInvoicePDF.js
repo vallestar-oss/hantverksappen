@@ -1,503 +1,428 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-
-// ── constants ──────────────────────────────────────────────────────────────
-
-const PRIMARY       = [37, 99, 235]        // #2563EB
-const PRIMARY_LIGHT = [219, 234, 254]      // blue-100
-const SUCCESS       = [22, 163, 74]        // #16A34A
-const SUCCESS_LIGHT = [220, 252, 231]      // green-100
-const DANGER        = [220, 38, 38]        // #DC2626
-const TEXT_DARK     = [17, 24, 39]         // gray-900
-const TEXT_MID      = [107, 114, 128]      // gray-500
-const TEXT_LIGHT    = [156, 163, 175]      // gray-400
-const BG_LIGHT      = [249, 250, 251]      // gray-50
-const BORDER        = [229, 231, 235]      // gray-200
-const AMBER_LIGHT   = [254, 243, 199]      // amber-100
-
-// ── helpers ────────────────────────────────────────────────────────────────
-
-/**
- * Replace Swedish characters that fall outside jsPDF's built-in Helvetica
- * Latin-1 subset with their closest ASCII equivalents.
- */
-function sanitizeText(str) {
-  if (str == null) return ''
-  return String(str)
-    .replace(/ä/g, 'a').replace(/Ä/g, 'A')
-    .replace(/å/g, 'a').replace(/Å/g, 'A')
-    .replace(/ö/g, 'o').replace(/Ö/g, 'O')
-}
-
-function formatSEK(n) {
-  return new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 2 }).format(n ?? 0) + ' kr'
-}
-
-function formatDate(iso) {
-  if (!iso) return '-'
-  return new Intl.DateTimeFormat('sv-SE', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  }).format(new Date(iso))
-}
-
-function todayISO() { return new Date().toISOString().slice(0, 10) }
+import { applySwedishFont, safeText } from './pdfFont'
+import { calcTotals, lineNet, rotRutLabel, VAT_RATES } from './calc'
+import { todayISO } from '../lib/date'
+import {
+  BLACK, LABEL, BORDER, DARK, ALT, DANGER, WHITE, MARGIN_X, FOOTER_RESERVE,
+  formatMoney, formatPdfDate, momsregNr, maxDeductionText, loadImageAsDataUrl, measureImage, drawFooters,
+} from './pdfCommon'
 
 function isOverdue(invoice) {
   return invoice.status === 'obetald' && invoice.due_date && invoice.due_date < todayISO()
 }
 
-async function loadImageAsDataUrl(url) {
-  try {
-    const res = await fetch(url)
-    const blob = await res.blob()
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result)
-      reader.onerror = reject
-      reader.readAsDataURL(blob)
-    })
-  } catch {
-    return null
-  }
-}
-
-function calcTotals(items, rotRutEnabled) {
-  const list = items ?? []
-  const subtotal = list.reduce((s, r) => s + (r.quantity ?? 0) * (r.unit_price ?? 0), 0)
-  const labourSubtotal = list
-    .filter(r => r.type === 'arbete')
-    .reduce((s, r) => s + (r.quantity ?? 0) * (r.unit_price ?? 0), 0)
-  const rotRutDeduction = rotRutEnabled ? labourSubtotal * 0.3 : 0
-  const vatByRate = {}
-  for (const r of list) {
-    const net = (r.quantity ?? 0) * (r.unit_price ?? 0)
-    vatByRate[r.vat_rate] = (vatByRate[r.vat_rate] ?? 0) + net * ((r.vat_rate ?? 25) / 100)
-  }
-  const totalVat = Object.values(vatByRate).reduce((s, v) => s + v, 0)
-  const totalInkMoms = subtotal + totalVat
-  const toPay = totalInkMoms - rotRutDeduction
-  return { subtotal, labourSubtotal, rotRutDeduction, vatByRate, totalVat, totalInkMoms, toPay }
-}
-
 // ── main export ────────────────────────────────────────────────────────────
-
 export async function generateInvoicePDF(invoice, invoiceItems, customer, companyProfile) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const doc   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()   // 210
   const pageH = doc.internal.pageSize.getHeight()  // 297
-  const margin = 15
-  const contentW = pageW - 2 * margin
+  const MX    = MARGIN_X
+  const CW    = pageW - 2 * MX   // 174 mm content width
+  const COL2X = MX + 108         // right-column x start (~126 mm)
+
+  const font = await applySwedishFont(doc)
+  const t    = safeText(font)
 
   // Load logo
   let logoDataUrl = null
-  const logoUrl = companyProfile?.logo_url?.split('?')[0]
-  if (logoUrl) logoDataUrl = await loadImageAsDataUrl(logoUrl)
+  if (companyProfile?.logo_url) {
+    logoDataUrl = await loadImageAsDataUrl(companyProfile.logo_url.split('?')[0])
+  }
 
-  // ── PAGE HEADER ────────────────────────────────────────────────────────────
+  // Tiny helpers to keep font-setting terse
+  function label(size = 7) {
+    doc.setFont(font, 'bold')
+    doc.setFontSize(size)
+    doc.setTextColor(...LABEL)
+    doc.setCharSpace(0.7)
+  }
+  function body(bold = false, color = BLACK) {
+    doc.setFont(font, bold ? 'bold' : 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(...color)
+    doc.setCharSpace(0)
+  }
 
-  let leftY = margin
-  let rightY = margin
+  // Starts a new page when fewer than `mm` millimetres remain above the footer.
+  let curY = 0
+  function ensureSpace(mm) {
+    if (curY + mm > pageH - FOOTER_RESERVE) {
+      doc.addPage()
+      curY = MX
+    }
+  }
 
-  // Logo (left column)
-  if (logoDataUrl) {
+  // ── HEADER (logo + seller left, FAKTURA right) ─────────────────────────────
+
+  let leftY  = MX
+  let rightY = MX
+
+  // Logo top-left
+  const logoSize = logoDataUrl ? await measureImage(logoDataUrl) : null
+  if (logoSize) {
+    const PX_TO_MM = 0.264583
+    const logoH = Math.min(22, logoSize.height * PX_TO_MM)
+    const logoW = Math.min(logoH * (logoSize.width / logoSize.height), 65)
     try {
-      const img = new Image()
-      img.src = logoDataUrl
-      await new Promise(r => { img.onload = r; img.onerror = r })
-      const maxH = 25
-      const ratio = img.naturalWidth / img.naturalHeight
-      const logoH = Math.min(maxH, img.naturalHeight * 0.264583)
-      const logoW = logoH * ratio
-      doc.addImage(logoDataUrl, 'AUTO', margin, leftY, logoW, logoH)
-      leftY += logoH + 4
-    } catch { /* ignore */ }
+      doc.addImage(logoDataUrl, 'AUTO', MX, leftY, logoW, logoH)
+      leftY += logoH + 5
+    } catch {
+      // Unsupported image format (e.g. SVG): leave the logo out rather than fail the PDF.
+    }
   }
 
   // Company name
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(font, 'bold')
   doc.setFontSize(13)
-  doc.setTextColor(...TEXT_DARK)
-  doc.text(sanitizeText(companyProfile?.company_name), margin, leftY)
-  leftY += 6
+  doc.setTextColor(...BLACK)
+  doc.setCharSpace(0)
+  doc.text(t(companyProfile?.company_name ?? ''), MX, leftY)
+  leftY += 5.5
 
   // Company detail lines
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...TEXT_MID)
-
+  body(false, LABEL)
+  const momsreg = momsregNr(companyProfile?.org_number)
   const companyLines = [
     companyProfile?.address,
     [companyProfile?.postal_code, companyProfile?.city].filter(Boolean).join(' '),
     companyProfile?.phone,
     companyProfile?.email,
-    [
-      companyProfile?.org_number ? `Org.nr: ${companyProfile.org_number}` : null,
-      companyProfile?.f_skatt ? 'Innehar F-skattsedel' : null,
-    ].filter(Boolean).join(' | '),
+    companyProfile?.org_number ? `Org.nr: ${companyProfile.org_number}` : null,
+    companyProfile?.f_skatt ? 'F-skatt' : null,
+    momsreg ? `Momsreg.nr: ${momsreg}` : null,
+    companyProfile?.bankgiro ? `Bankgiro: ${companyProfile.bankgiro}` : null,
   ].filter(Boolean)
-
   for (const line of companyLines) {
-    doc.text(sanitizeText(line), margin, leftY)
-    leftY += 4.5
+    doc.text(t(line), MX, leftY)
+    leftY += 4
   }
 
-  // "FAKTURA" heading (right column)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(30)
-  doc.setTextColor(...PRIMARY)
-  doc.text('FAKTURA', pageW - margin, rightY, { align: 'right' })
-  rightY += 11
+  // "FAKTURA" — black, large, top-right
+  doc.setFont(font, 'bold')
+  doc.setFontSize(28)
+  doc.setTextColor(...BLACK)
+  doc.setCharSpace(1.5)
+  doc.text('FAKTURA', pageW - MX, rightY, { align: 'right' })
+  doc.setCharSpace(0)
+  rightY += 9
 
   // Invoice number
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(...TEXT_DARK)
-  doc.text(`Nr: ${invoice.invoice_number ?? '-'}`, pageW - margin, rightY, { align: 'right' })
-  rightY += 5.5
-
-  // Fakturadatum
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...TEXT_MID)
-  doc.text(sanitizeText(`Fakturadatum: ${formatDate(invoice.invoice_date)}`), pageW - margin, rightY, { align: 'right' })
-  rightY += 4.5
-
-  // Forfallodatum — red if overdue
-  const overdue = isOverdue(invoice)
-  doc.setFont('helvetica', overdue ? 'bold' : 'normal')
-  doc.setTextColor(...(overdue ? DANGER : TEXT_MID))
-  doc.text(
-    sanitizeText(`Forfallodatum: ${formatDate(invoice.due_date)}${overdue ? ' (FORFALLIT)' : ''}`),
-    pageW - margin, rightY, { align: 'right' }
-  )
+  body(false, LABEL)
+  doc.text(t(`Nr ${invoice.invoice_number ?? '—'}`), pageW - MX, rightY, { align: 'right' })
   rightY += 5
 
-  // ROT/RUT badge
-  if (invoice.rot_rut_enabled) {
-    const badgeLabel = sanitizeText((invoice.rot_rut_type ?? 'rot').toUpperCase() + '-avdrag')
-    const badgeW = doc.getTextWidth(badgeLabel) + 6
-    const badgeX = pageW - margin - badgeW
-    doc.setFillColor(...SUCCESS)
-    doc.roundedRect(badgeX, rightY - 4, badgeW, 6, 1, 1, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(255, 255, 255)
-    doc.text(badgeLabel, badgeX + 3, rightY)
-    rightY += 7
-  }
-
-  // Status badge if paid
+  // Status — plain text, no badge
+  const overdue = isOverdue(invoice)
   if (invoice.status === 'betald') {
-    const badgeW = doc.getTextWidth('BETALD') + 6
-    const badgeX = pageW - margin - badgeW
-    doc.setFillColor(...SUCCESS)
-    doc.roundedRect(badgeX, rightY - 4, badgeW, 6, 1, 1, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(255, 255, 255)
-    doc.text('BETALD', badgeX + 3, rightY)
-    rightY += 7
+    body(false, LABEL)
+    doc.text(t('Betald'), pageW - MX, rightY, { align: 'right' })
+    rightY += 5
+  } else if (overdue) {
+    body(true, DANGER)
+    doc.text(t('Försenad'), pageW - MX, rightY, { align: 'right' })
+    rightY += 5
+  }
+  if (invoice.rot_rut_enabled) {
+    body(false, LABEL)
+    doc.text(t(`${rotRutLabel(invoice.rot_rut_type)}-avdrag`), pageW - MX, rightY, { align: 'right' })
+    rightY += 5
   }
 
-  // Divider
-  const dividerY = Math.max(leftY, rightY) + 4
-  doc.setDrawColor(...PRIMARY_LIGHT)
+  // Horizontal divider
+  const divY = Math.max(leftY, rightY) + 6
+  doc.setDrawColor(...BORDER)
   doc.setLineWidth(0.5)
-  doc.line(margin, dividerY, pageW - margin, dividerY)
+  doc.line(MX, divY, pageW - MX, divY)
+  curY = divY + 8
 
-  let curY = dividerY + 7
+  // ── BUYER + DATES (two columns) ────────────────────────────────────────────
 
-  // ── CUSTOMER SECTION ───────────────────────────────────────────────────────
+  let buyerY = curY
+  let datesY = curY
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(...TEXT_LIGHT)
-  doc.text('FAKTURERAS TILL:', margin, curY)
-  curY += 5
+  // Left: "FAKTURERAS TILL" label
+  label()
+  doc.text('FAKTURERAS TILL', MX, buyerY)
+  doc.setCharSpace(0)
+  buyerY += 5
 
-  doc.setFont('helvetica', 'bold')
+  // Left: Customer name
+  doc.setFont(font, 'bold')
   doc.setFontSize(11)
-  doc.setTextColor(...TEXT_DARK)
-  doc.text(sanitizeText(customer?.name), margin, curY)
-  curY += 5.5
+  doc.setTextColor(...BLACK)
+  doc.text(t(customer?.name ?? '—'), MX, buyerY)
+  buyerY += 5.5
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...TEXT_MID)
-
-  const customerLines = [
+  // Left: Customer address lines
+  body(false, LABEL)
+  const custLines = [
     customer?.address,
     [customer?.postal_code, customer?.city].filter(Boolean).join(' '),
     customer?.phone,
     customer?.email,
   ].filter(Boolean)
-
-  for (const line of customerLines) {
-    doc.text(sanitizeText(line), margin, curY)
-    curY += 4.5
+  for (const line of custLines) {
+    doc.text(t(line), MX, buyerY)
+    buyerY += 4.5
   }
 
-  curY += 6
+  // Right: FAKTURADATUM
+  label()
+  doc.text('FAKTURADATUM', COL2X, datesY)
+  doc.setCharSpace(0)
+  datesY += 4.5
+  body(false, BLACK)
+  doc.text(t(formatPdfDate(invoice.invoice_date)), COL2X, datesY)
+  datesY += 7.5
+
+  // Right: FÖRFALLODATUM
+  label()
+  doc.text(t('FÖRFALLODATUM'), COL2X, datesY)
+  doc.setCharSpace(0)
+  datesY += 4.5
+  body(overdue, overdue ? DANGER : BLACK)
+  doc.text(
+    t(formatPdfDate(invoice.due_date) + (overdue ? ' — försenad' : '')),
+    COL2X, datesY
+  )
+  datesY += 5
+
+  curY = Math.max(buyerY, datesY) + 9
 
   // ── LINE ITEMS TABLE ───────────────────────────────────────────────────────
 
+  const rotRutEnabled = invoice.rot_rut_enabled
   const tableRows = (invoiceItems ?? []).map(item => [
-    sanitizeText(item.description) || '-',
-    item.type === 'arbete' ? 'Arbete' : 'Material',
+    t(item.description) || '—',
+    item.type === 'arbete' ? t('Arbete') : t('Material'),
     String(item.quantity ?? 0),
     item.unit ?? 'st',
-    formatSEK(item.unit_price ?? 0),
-    `${item.vat_rate ?? 25}%`,
-    formatSEK((item.quantity ?? 0) * (item.unit_price ?? 0)),
+    formatMoney(item.unit_price ?? 0),
+    `${item.vat_rate ?? 25} %`,
+    formatMoney(lineNet(item)),
   ])
 
-  const rotRutEnabled = invoice.rot_rut_enabled
+  doc.setFont(font, 'normal')
+  doc.setCharSpace(0)
 
   autoTable(doc, {
     startY: curY,
-    margin: { left: margin, right: margin },
-    head: [['Beskrivning', 'Typ', 'Antal', 'Enhet', 'A-pris', 'Moms', 'Summa']],
+    margin: { left: MX, right: MX },
+    head: [[
+      t('Beskrivning'), t('Typ'), t('Antal'), t('Enhet'),
+      t('À-pris'), t('Moms'), t('Summa'),
+    ]],
     body: tableRows,
     styles: {
-      fontSize: 9,
-      cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
-      textColor: TEXT_DARK,
+      font,
+      fontSize: 8.5,
+      cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 },
+      textColor: BLACK,
       lineColor: BORDER,
-      lineWidth: 0.1,
+      lineWidth: { top: 0, right: 0, bottom: 0.3, left: 0 },
     },
     headStyles: {
-      fillColor: PRIMARY,
-      textColor: [255, 255, 255],
+      font,
+      fillColor: WHITE,
+      textColor: BLACK,
       fontStyle: 'bold',
-      fontSize: 8.5,
+      fontSize: 8,
+      lineColor: DARK,
+      lineWidth: { top: 0, right: 0, bottom: 0.5, left: 0 },
     },
-    alternateRowStyles: { fillColor: BG_LIGHT },
+    alternateRowStyles: { fillColor: ALT },
     columnStyles: {
       0: { cellWidth: 'auto' },
-      1: { cellWidth: 24, halign: 'center' },
-      2: { cellWidth: 18, halign: 'right' },
-      3: { cellWidth: 18, halign: 'center' },
+      1: { cellWidth: 22, halign: 'center', textColor: LABEL },
+      2: { cellWidth: 16, halign: 'right' },
+      3: { cellWidth: 16, halign: 'center' },
       4: { cellWidth: 26, halign: 'right' },
-      5: { cellWidth: 18, halign: 'center' },
+      5: { cellWidth: 16, halign: 'center', textColor: LABEL },
       6: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
-    },
-    willDrawCell(data) {
-      if (rotRutEnabled && data.section === 'body') {
-        const typeCell = data.row.cells[1]
-        if (typeCell?.text?.[0] === 'Arbete') {
-          doc.setFillColor(...AMBER_LIGHT)
-        }
-      }
-    },
-    didDrawCell(data) {
-      if (data.section === 'body' && data.column.index === 1) {
-        const val = data.cell.text[0]
-        doc.setTextColor(...(val === 'Arbete' ? PRIMARY : TEXT_MID))
-      }
     },
   })
 
-  curY = doc.lastAutoTable.finalY + 8
+  curY = doc.lastAutoTable.finalY + 10
 
-  // ── SUMMARY (right-aligned) ────────────────────────────────────────────────
+  // ── SUMMARY ────────────────────────────────────────────────────────────────
 
-  const { subtotal, labourSubtotal, rotRutDeduction, vatByRate, totalInkMoms, toPay } =
+  const { subtotal, labourInclVat, rotRutDeduction, vatByRate, totalInkMoms, toPay } =
     calcTotals(invoiceItems, rotRutEnabled)
+  const rrLabel = rotRutLabel(invoice.rot_rut_type)
 
-  const summaryX = pageW / 2 + 10
-  const summaryW = pageW - margin - summaryX
+  ensureSpace(70)
+  const sumX = MX + 92
+  const sumW = pageW - MX - sumX   // ~82 mm
 
-  function summaryLine(label, value, opts = {}) {
-    const { bold = false, color = TEXT_MID, valueColor = TEXT_DARK } = opts
-    doc.setFont('helvetica', bold ? 'bold' : 'normal')
+  function summaryRow(lbl, val, bold = false, lblColor = LABEL, valColor = BLACK) {
+    doc.setFont(font, bold ? 'bold' : 'normal')
     doc.setFontSize(9)
-    doc.setTextColor(...color)
-    doc.text(sanitizeText(label), summaryX, curY)
-    doc.setTextColor(...valueColor)
-    doc.text(sanitizeText(value), summaryX + summaryW, curY, { align: 'right' })
+    doc.setCharSpace(0)
+    doc.setTextColor(...lblColor)
+    doc.text(t(lbl), sumX, curY)
+    doc.setTextColor(...valColor)
+    doc.text(val, sumX + sumW, curY, { align: 'right' })
     curY += 5
   }
 
-  summaryLine('Delsumma ex. moms', formatSEK(subtotal))
+  function hRule(color = BORDER, w = 0.3) {
+    doc.setDrawColor(...color)
+    doc.setLineWidth(w)
+    doc.line(sumX, curY - 1.5, sumX + sumW, curY - 1.5)
+    curY += 1.5
+  }
+
+  summaryRow('Delsumma ex. moms', formatMoney(subtotal))
+
+  hRule()
+
+  for (const r of VAT_RATES.filter(rate => (vatByRate[rate] ?? 0) > 0)) {
+    summaryRow(t(`Moms ${r} %`), formatMoney(vatByRate[r]))
+  }
+
+  hRule()
+  summaryRow('Totalt ink. moms', formatMoney(totalInkMoms), true, BLACK, BLACK)
 
   if (rotRutEnabled && rotRutDeduction > 0) {
-    const rrLabel = `${(invoice.rot_rut_type ?? 'rot').toUpperCase()}-avdrag (30% arbete)`
-    summaryLine(rrLabel, `- ${formatSEK(rotRutDeduction)}`, { color: SUCCESS, valueColor: SUCCESS, bold: true })
+    summaryRow(t(`${rrLabel}-avdrag (30 % av arbete)`), `- ${formatMoney(rotRutDeduction)}`)
   }
 
-  doc.setDrawColor(...BORDER)
-  doc.setLineWidth(0.2)
-  doc.line(summaryX, curY - 1, summaryX + summaryW, curY - 1)
+  // "Att betala" — bold, no fill, thin top rule
+  curY += 3
+  hRule(BLACK, 0.5)
   curY += 1
 
-  const usedRates = [25, 12, 6].filter(r => (vatByRate[r] ?? 0) > 0)
-  for (const r of usedRates) {
-    summaryLine(`Moms ${r}%`, formatSEK(vatByRate[r]))
-  }
-
-  doc.line(summaryX, curY - 1, summaryX + summaryW, curY - 1)
-  curY += 1
-  summaryLine('Totalt ink. moms', formatSEK(totalInkMoms), { bold: true, color: TEXT_DARK })
-
-  curY += 2
-
-  // "Att betala" highlight box
-  const toPayLabel = sanitizeText(rotRutEnabled ? 'Att betala efter ROT/RUT' : 'Att betala')
-  doc.setFillColor(...PRIMARY_LIGHT)
-  doc.roundedRect(summaryX - 3, curY - 4.5, summaryW + 3, 9, 1, 1, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(...PRIMARY)
-  doc.text(toPayLabel, summaryX, curY)
-  doc.text(formatSEK(toPay), summaryX + summaryW, curY, { align: 'right' })
-  curY += 12
+  const toPayLabel = rotRutEnabled
+    ? t('Att betala efter ROT/RUT')
+    : t('Att betala')
+  doc.setFont(font, 'bold')
+  doc.setFontSize(10.5)
+  doc.setCharSpace(0)
+  doc.setTextColor(...BLACK)
+  doc.text(toPayLabel, sumX, curY + 5)
+  doc.text(formatMoney(toPay), sumX + sumW, curY + 5, { align: 'right' })
+  curY += 14
 
   // Notes
   if (invoice.notes) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(...TEXT_LIGHT)
-    doc.text('ANTECKNINGAR', margin, curY)
-    curY += 4.5
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    doc.setTextColor(...TEXT_MID)
-    const noteLines = doc.splitTextToSize(sanitizeText(invoice.notes), contentW)
-    doc.text(noteLines, margin, curY)
+    ensureSpace(20)
+    label()
+    doc.text('ANTECKNINGAR', MX, curY)
+    doc.setCharSpace(0)
+    curY += 5
+    body(false, LABEL)
+    const noteLines = doc.splitTextToSize(t(invoice.notes), CW)
+    doc.text(noteLines, MX, curY)
     curY += noteLines.length * 4.5 + 6
   }
 
   // ── PAYMENT INFORMATION ────────────────────────────────────────────────────
 
-  const payBoxY = curY
-  curY += 5
+  ensureSpace(50)
+  curY += 2
+  doc.setDrawColor(...BORDER)
+  doc.setLineWidth(0.5)
+  doc.line(MX, curY, pageW - MX, curY)
+  curY += 6
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.setTextColor(...TEXT_DARK)
-  doc.text('Betalningsinformation', margin + 3, curY)
-  curY += 5.5
+  label()
+  doc.text('BETALNINGSINFORMATION', MX, curY)
+  doc.setCharSpace(0)
+  curY += 6.5
 
-  const halfW = (contentW - 6) / 2
-  const col2PayX = margin + 3 + halfW + 8
+  const payCol2 = MX + CW / 2
 
-  function payRow(label, value, x, bold = false) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(...TEXT_LIGHT)
-    doc.text(sanitizeText(label), x, curY)
-    doc.setFont('helvetica', bold ? 'bold' : 'normal')
+  function payField(lbl, val, x, bold = false) {
+    doc.setFont(font, 'bold')
+    doc.setFontSize(7)
+    doc.setTextColor(...LABEL)
+    doc.setCharSpace(0.5)
+    doc.text(t(lbl), x, curY)
+    doc.setCharSpace(0)
+    doc.setFont(font, bold ? 'bold' : 'normal')
     doc.setFontSize(9)
-    doc.setTextColor(...TEXT_DARK)
-    doc.text(sanitizeText(value), x, curY + 4)
+    doc.setTextColor(...BLACK)
+    doc.text(t(val), x, curY + 4.5)
   }
 
   const hasBankgiro = !!companyProfile?.bankgiro
-  const hasSwish = !!companyProfile?.swish
+  const hasSwish    = !!companyProfile?.swish
 
-  if (hasBankgiro) payRow('Bankgiro', companyProfile.bankgiro, margin + 3, true)
-  if (hasSwish) payRow('Swish', companyProfile.swish, hasBankgiro ? col2PayX : margin + 3, true)
-  if (hasBankgiro || hasSwish) curY += 10
+  if (hasBankgiro) payField('BANKGIRO', companyProfile.bankgiro, MX, true)
+  if (hasSwish)    payField('SWISH', companyProfile.swish, hasBankgiro ? payCol2 : MX, true)
+  if (hasBankgiro || hasSwish) curY += 11
 
-  payRow('OCR / Referens', invoice.invoice_number ?? '-', margin + 3, true)
-  payRow('Forfallodatum', formatDate(invoice.due_date), col2PayX, overdue)
-  curY += 10
+  payField('OCR / REFERENS', invoice.invoice_number ?? '—', MX, true)
+  payField(t('FÖRFALLODATUM'), formatPdfDate(invoice.due_date), payCol2, overdue)
+  curY += 11
 
-  payRow('Betalningsvillkor', '30 dagar netto', margin + 3)
+  payField('BETALNINGSVILLKOR', '30 dagar netto', MX)
   if (invoice.status === 'betald' && invoice.paid_date) {
-    payRow('Betald', formatDate(invoice.paid_date), col2PayX)
+    payField('BETALT', formatPdfDate(invoice.paid_date), payCol2)
   }
   curY += 10
-
-  doc.setDrawColor(...BORDER)
-  doc.setLineWidth(0.3)
-  doc.roundedRect(margin, payBoxY, contentW, curY - payBoxY + 2, 2, 2, 'S')
-  curY += 6
 
   // ── ROT/RUT INFORMATION ────────────────────────────────────────────────────
 
   if (rotRutEnabled) {
-    const rrType = (invoice.rot_rut_type ?? 'rot').toUpperCase()
-    const rrBoxY = curY
-    curY += 5
+    ensureSpace(55)
+    curY += 2
+    doc.setDrawColor(...BORDER)
+    doc.setLineWidth(0.5)
+    doc.line(MX, curY, pageW - MX, curY)
+    curY += 6
 
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.setTextColor(...TEXT_DARK)
-    doc.text(`${rrType}-information`, margin + 3, curY)
+    label()
+    doc.text(t(`${rrLabel}-INFORMATION`), MX, curY)
+    doc.setCharSpace(0)
     curY += 5.5
 
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
-    doc.setTextColor(...TEXT_MID)
-
-    const maxAmount = invoice.rot_rut_type === 'rut' ? '75 000' : '50 000'
-    const rrExplain = doc.splitTextToSize(
-      `Kunden betalar reducerat belopp enligt reglerna for ${rrType}-avdrag. ` +
-      `Hantverkaren ansoker om utbetalning fran Skatteverket for mellanskillnaden. ` +
-      `Maxbelopp: ${maxAmount} kr per person och ar.`,
-      contentW - 6
+    const maxAmount = maxDeductionText(invoice.rot_rut_type)
+    const rrText = t(
+      `Kunden betalar reducerat belopp enligt reglerna för ${rrLabel}-avdrag. ` +
+      `Hantverkaren ansöker om utbetalning från Skatteverket för mellanskillnaden. ` +
+      `Maxbelopp: ${maxAmount} kr per person och år.`
     )
-    doc.text(rrExplain, margin + 3, curY)
-    curY += rrExplain.length * 4.2 + 4
+    body(false, LABEL)
+    const rrLines = doc.splitTextToSize(rrText, CW)
+    doc.text(rrLines, MX, curY)
+    curY += rrLines.length * 4.5 + 5
 
-    const workcostExVat = labourSubtotal
-    const reduction = workcostExVat * 0.3
-    const customerShare = totalInkMoms - reduction
+    doc.setFont(font, 'normal')
+    doc.setCharSpace(0)
 
     autoTable(doc, {
       startY: curY,
-      margin: { left: margin + 3, right: margin + 3 },
+      margin: { left: MX, right: MX },
       body: [
-        ['Arbetskostnad ex. moms', formatSEK(workcostExVat)],
-        [`Skattereduktion 30% (${rrType})`, `- ${formatSEK(reduction)}`],
-        ['Kundens andel att betala', formatSEK(customerShare)],
+        [t('Arbetskostnad inkl. moms'), formatMoney(labourInclVat)],
+        [t(`Skattereduktion 30 % (${rrLabel})`), `- ${formatMoney(rotRutDeduction)}`],
+        [t('Kundens andel att betala'), formatMoney(toPay)],
       ],
       styles: {
+        font,
         fontSize: 8.5,
         cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 4 },
-        textColor: TEXT_DARK,
+        textColor: BLACK,
         lineColor: BORDER,
-        lineWidth: 0.1,
+        lineWidth: { top: 0, right: 0, bottom: 0.3, left: 0 },
       },
-      alternateRowStyles: { fillColor: SUCCESS_LIGHT },
       columnStyles: {
-        0: { cellWidth: 'auto', fontStyle: 'normal' },
-        1: { cellWidth: 40, halign: 'right', fontStyle: 'bold' },
-      },
-      didDrawCell(data) {
-        if (data.section === 'body' && data.row.index === 2) {
-          doc.setTextColor(...PRIMARY)
-        }
+        0: { cellWidth: 'auto' },
+        1: { cellWidth: 42, halign: 'right', fontStyle: 'bold' },
       },
     })
 
-    curY = doc.lastAutoTable.finalY + 6
-
-    doc.setDrawColor(...SUCCESS)
-    doc.setLineWidth(0.3)
-    doc.roundedRect(margin, rrBoxY, contentW, curY - rrBoxY + 2, 2, 2, 'S')
-    curY += 6
+    curY = doc.lastAutoTable.finalY + 8
   }
 
   // ── FOOTER ─────────────────────────────────────────────────────────────────
 
-  const footerY = pageH - 14
-  doc.setDrawColor(...PRIMARY_LIGHT)
-  doc.setLineWidth(0.4)
-  doc.line(margin, footerY - 3, pageW - margin, footerY - 3)
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.setTextColor(...TEXT_LIGHT)
-  doc.text('Tack for ditt fortroende!', margin, footerY)
-
-  const pageCount = doc.internal.getNumberOfPages()
-  doc.text(`Sida 1 av ${pageCount}`, pageW - margin, footerY, { align: 'right' })
+  drawFooters(doc, font, t('Tack för ditt förtroende!'))
 
   // ── SAVE ───────────────────────────────────────────────────────────────────
 
-  const filename = `Faktura-${invoice.invoice_number ?? invoice.id}.pdf`
-  doc.save(filename)
+  doc.save(`Faktura-${invoice.invoice_number ?? invoice.id}.pdf`)
   return doc
 }

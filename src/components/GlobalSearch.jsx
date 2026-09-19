@@ -1,19 +1,14 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../hooks/useAuth'
+import { formatSEK } from '../lib/format'
+import { todayISO } from '../lib/date'
+import { documentTotal } from '../utils/calc'
 import { Search, Users, FileText, Receipt, Briefcase, X, Loader2 } from 'lucide-react'
 
 // Global search — full-screen modal over everything. Loads all data once per
 // open session, then filters instantly client-side. Ctrl+K / Cmd+K to open.
-
-function formatSEK(n) {
-  return new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 }).format(n ?? 0) + ' kr'
-}
-
-function calcTotal(items = []) {
-  return items.reduce((s, r) => s + (r.quantity ?? 0) * (r.unit_price ?? 0), 0)
-}
 
 const QUOTE_LABEL = { utkast: 'Utkast', skickad: 'Skickad', godkänd: 'Godkänd', avvisad: 'Avvisad' }
 const INVOICE_LABEL = { obetald: 'Obetald', betald: 'Betald', försenad: 'Försenad' }
@@ -75,8 +70,8 @@ function SearchModal({ onClose }) {
       const [{ data: customers }, { data: quotes }, { data: invoices }, { data: jobs }] =
         await Promise.all([
           supabase.from('customers').select('id, name, phone, email, city').eq('user_id', user.id),
-          supabase.from('quotes').select('id, quote_number, status, customers(name), quote_items(quantity, unit_price)').eq('user_id', user.id),
-          supabase.from('invoices').select('id, invoice_number, status, due_date, customers(name), invoice_items(quantity, unit_price)').eq('user_id', user.id),
+          supabase.from('quotes').select('id, quote_number, status, customers(name), rot_rut_enabled, quote_items(type, quantity, unit_price, vat_rate)').eq('user_id', user.id),
+          supabase.from('invoices').select('id, invoice_number, status, due_date, rot_rut_enabled, customers(name), invoice_items(type, quantity, unit_price, vat_rate)').eq('user_id', user.id),
           supabase.from('jobs').select('id, title, status, customers(name)').eq('user_id', user.id),
         ])
       if (cancelled) return
@@ -110,8 +105,6 @@ function SearchModal({ onClose }) {
     const q = query.trim().toLowerCase()
     if (!q || !data) return null
 
-    function todayISO() { return new Date().toISOString().slice(0, 10) }
-
     const customers = data.customers
       .filter(c =>
         c.name?.toLowerCase().includes(q) ||
@@ -130,7 +123,7 @@ function SearchModal({ onClose }) {
       .map(qu => ({
         id: qu.id, path: `/quotes/${qu.id}`,
         title: `Offert ${qu.quote_number ?? '–'}`, sub: qu.customers?.name ?? '',
-        amount: formatSEK(calcTotal(qu.quote_items)),
+        amount: formatSEK(documentTotal(qu.quote_items, qu.rot_rut_enabled), { max: 0 }),
         badge: QUOTE_LABEL[qu.status] ?? qu.status,
         badgeCls: QUOTE_BADGE[qu.status] ?? QUOTE_BADGE.utkast,
       }))
@@ -145,7 +138,7 @@ function SearchModal({ onClose }) {
         return {
           id: inv.id, path: `/invoices/${inv.id}`,
           title: `Faktura ${inv.invoice_number ?? '–'}`, sub: inv.customers?.name ?? '',
-          amount: formatSEK(calcTotal(inv.invoice_items)),
+          amount: formatSEK(documentTotal(inv.invoice_items, inv.rot_rut_enabled), { max: 0 }),
           badge: INVOICE_LABEL[status] ?? status,
           badgeCls: INVOICE_BADGE[status] ?? INVOICE_BADGE.obetald,
         }

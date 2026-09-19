@@ -1,36 +1,31 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { BarChart3, Download, CheckCircle, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import { buildFortnoxCSV, downloadCSV } from '../utils/exportFortnox'
-import { ChevronLeft, BarChart3, Download, CheckCircle, Loader2 } from 'lucide-react'
-import { Fx } from '../components/Premium'
-
-// ── helpers ────────────────────────────────────────────────────────────────
-
-function todayISO() { return new Date().toISOString().slice(0, 10) }
-
-function firstOfMonthISO() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
-}
-
-// ── component ──────────────────────────────────────────────────────────────
+import { todayISO, monthStartISO } from '../lib/date'
+import { pluralize } from '../lib/format'
+import Page from '../components/Premium'
+import { Card, Field, FormError, FormHeader, inputClass } from '../components/FormField'
 
 export default function Export() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  const [fromDate, setFromDate]     = useState(firstOfMonthISO())
-  const [toDate, setToDate]         = useState(todayISO())
-  const [inclPaid, setInclPaid]     = useState(true)
+  const [fromDate, setFromDate] = useState(monthStartISO)
+  const [toDate, setToDate] = useState(todayISO)
+  const [inclPaid, setInclPaid] = useState(true)
   const [inclUnpaid, setInclUnpaid] = useState(true)
 
-  const [loading, setLoading]       = useState(false)
-  const [result, setResult]         = useState(null) // { count } after export
-  const [error, setError]           = useState('')
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState(null) // { count, filename } after an export
+  const [error, setError] = useState('')
 
-  // ── preview count query ────────────────────────────────────────────────
+  // Any change to the filters invalidates the previous "exported" message.
+  function update(setter) {
+    return value => { setter(value); setResult(null) }
+  }
 
   async function handleExport() {
     setError('')
@@ -43,9 +38,8 @@ export default function Export() {
 
     setLoading(true)
 
-    // Build status filter
     const statuses = []
-    if (inclPaid)   statuses.push('betald')
+    if (inclPaid) statuses.push('betald')
     if (inclUnpaid) statuses.push('obetald')
 
     let query = supabase
@@ -55,105 +49,63 @@ export default function Export() {
       .in('status', statuses)
       .order('invoice_date', { ascending: true })
 
-    // Date range on invoice_date (null dates are excluded by range filter)
+    // Range on invoice_date; invoices without a date are excluded by the filter.
     if (fromDate) query = query.gte('invoice_date', fromDate)
-    if (toDate)   query = query.lte('invoice_date', toDate)
+    if (toDate) query = query.lte('invoice_date', toDate)
 
-    const { data, error: fetchErr } = await query
+    const { data, error: fetchError } = await query
 
-    if (fetchErr) {
-      console.error('Export fetch error:', fetchErr)
-      setError(`Kunde inte hämta fakturor: ${fetchErr.message}`)
-      setLoading(false)
-      return
-    }
-
-    const invoices = data ?? []
-
-    if (invoices.length === 0) {
+    if (fetchError) {
+      setError('Kunde inte hämta fakturor. Försök igen.')
+    } else if (!data?.length) {
       setError('Inga fakturor hittades för valda filter.')
-      setLoading(false)
-      return
+    } else {
+      const filename = `Fortnox-export-${todayISO()}.csv`
+      downloadCSV(buildFortnoxCSV(data), filename)
+      setResult({ count: data.length, filename })
     }
 
-    const csv      = buildFortnoxCSV(invoices)
-    const filename = `Fortnox-export-${todayISO()}.csv`
-    downloadCSV(csv, filename)
-
-    setResult({ count: invoices.length, filename })
     setLoading(false)
   }
 
-  // ── render ─────────────────────────────────────────────────────────────
-
   return (
-    <div className="page-fade min-h-screen bg-gray-50">
-      <Fx />
-
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
-        <button
-          onClick={() => navigate('/settings')}
-          className="text-gray-500 hover:text-gray-800 transition-colors p-1 -ml-1 rounded-lg"
-          aria-label="Tillbaka"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <h1 className="font-bold text-gray-800 text-lg">Exportera</h1>
-      </header>
+    <Page className="min-h-screen bg-gray-50">
+      <FormHeader title="Exportera" onBack={() => navigate('/settings')} />
 
       <div className="max-w-lg mx-auto px-4 py-5 space-y-4 pb-20">
-
-        {/* Fortnox export card */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-5">
-
-          {/* Section heading */}
+        <Card className="space-y-5">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <BarChart3 className="w-5 h-5 text-primary" />
+              <BarChart3 className="w-5 h-5 text-primary" aria-hidden="true" />
             </div>
             <div>
               <h2 className="font-semibold text-gray-800 text-sm">Fortnox-export</h2>
               <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
-                Exportera fakturor i Fortnox-kompatibelt CSV-format. Filen kan importeras direkt i Fortnox bokföring.
+                Exportera fakturor som en CSV-fil för bokföring, med en rad per fakturarad.
               </p>
             </div>
           </div>
 
-          {/* Date range */}
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Datumintervall</p>
+          <fieldset>
+            <legend className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Datumintervall</legend>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelClass}>Från datum</label>
-                <input
-                  type="date"
-                  value={fromDate}
-                  onChange={e => { setFromDate(e.target.value); setResult(null) }}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Till datum</label>
-                <input
-                  type="date"
-                  value={toDate}
-                  onChange={e => { setToDate(e.target.value); setResult(null) }}
-                  className={inputClass}
-                />
-              </div>
+              <Field label="Från datum">
+                <input type="date" value={fromDate} onChange={e => update(setFromDate)(e.target.value)} className={inputClass} />
+              </Field>
+              <Field label="Till datum">
+                <input type="date" value={toDate} onChange={e => update(setToDate)(e.target.value)} className={inputClass} />
+              </Field>
             </div>
-          </div>
+          </fieldset>
 
-          {/* Status checkboxes */}
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Status</p>
+          <fieldset>
+            <legend className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Status</legend>
             <div className="flex gap-4">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={inclPaid}
-                  onChange={e => { setInclPaid(e.target.checked); setResult(null) }}
+                  onChange={e => update(setInclPaid)(e.target.checked)}
                   className="w-4 h-4 rounded accent-primary"
                 />
                 <span className="text-sm text-gray-700">Betalda</span>
@@ -162,15 +114,14 @@ export default function Export() {
                 <input
                   type="checkbox"
                   checked={inclUnpaid}
-                  onChange={e => { setInclUnpaid(e.target.checked); setResult(null) }}
+                  onChange={e => update(setInclUnpaid)(e.target.checked)}
                   className="w-4 h-4 rounded accent-primary"
                 />
                 <span className="text-sm text-gray-700">Obetalda</span>
               </label>
             </div>
-          </div>
+          </fieldset>
 
-          {/* Export button */}
           <button
             type="button"
             onClick={handleExport}
@@ -190,39 +141,29 @@ export default function Export() {
             )}
           </button>
 
-          {/* Error */}
-          {error && (
-            <p className="text-sm text-danger">{error}</p>
-          )}
+          <FormError>{error}</FormError>
 
-          {/* Success summary */}
           {result && (
-            <div className="flex items-start gap-3 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
-              <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
+            <div role="status" className="flex items-start gap-3 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+              <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" aria-hidden="true" />
               <div>
                 <p className="text-sm font-semibold text-success">
-                  {result.count} {result.count === 1 ? 'faktura exporterad' : 'fakturor exporterade'}
+                  {pluralize(result.count, 'faktura exporterad', 'fakturor exporterade')}
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5 font-mono">{result.filename}</p>
               </div>
             </div>
           )}
-        </div>
+        </Card>
 
-        {/* Info box */}
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-1.5">
-          <p className="text-xs font-semibold text-blue-700">Om Fortnox-export</p>
+          <p className="text-xs font-semibold text-blue-700">Om exportformatet</p>
           <p className="text-xs text-blue-600 leading-relaxed">
-            CSV-filen är UTF-8-kodad med semikolonseparering och passar för import i Fortnox under
-            <span className="font-semibold"> Fakturering → Importera fakturor</span>.
-            Öppna inte filen i Excel innan import — det kan förstöra teckenkodningen.
+            Filen är UTF-8-kodad med semikolon som avgränsare. Kontrollera kolumnerna mot importmallen i
+            ditt bokföringsprogram innan du importerar.
           </p>
         </div>
-
       </div>
-    </div>
+    </Page>
   )
 }
-
-const inputClass = 'w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent'
-const labelClass = 'block text-xs font-medium text-gray-500 mb-1'

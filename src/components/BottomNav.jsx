@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, Link } from 'react-router-dom'
 import { Home, Users, FileText, Briefcase, Receipt, Search } from 'lucide-react'
 
 const tabs = [
@@ -11,7 +11,6 @@ const tabs = [
 
 export default function BottomNav({ onSearch }) {
   const location = useLocation()
-  const navigate = useNavigate()
 
   function isActive(path) {
     if (path === '/dashboard') return location.pathname === '/dashboard'
@@ -20,6 +19,7 @@ export default function BottomNav({ onSearch }) {
 
   return (
     <nav
+      aria-label="Huvudmeny"
       className="fixed bottom-0 left-0 right-0 flex z-20 h-[62px]"
       style={{
         background: 'rgba(255,255,255,0.97)',
@@ -31,11 +31,11 @@ export default function BottomNav({ onSearch }) {
       {tabs.map(({ label, path, Icon }) => {
         const active = isActive(path)
         return (
-          <button
+          <Link
             key={path}
-            onClick={() => navigate(path)}
+            to={path}
+            aria-current={active ? 'page' : undefined}
             className="flex-1 flex flex-col items-center justify-center gap-[3px] h-full transition-opacity active:opacity-60"
-            aria-label={label}
           >
             <div className="relative flex items-center justify-center">
               {active && (
@@ -58,7 +58,7 @@ export default function BottomNav({ onSearch }) {
             >
               {label}
             </span>
-          </button>
+          </Link>
         )
       })}
 

@@ -1,31 +1,57 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import Page from '../components/Premium'
 import EmptyState from '../components/EmptyState'
 import { Search, Plus, ChevronRight } from 'lucide-react'
 import { SkeletonRow } from '../components/Skeleton'
+import { useToast } from '../hooks/useToast'
+
+const AVATAR_COLORS = [
+  ['#EFF6FF', '#1D4ED8'], ['#F0FDF4', '#15803D'], ['#FFF7ED', '#C2410C'],
+  ['#FDF4FF', '#7E22CE'], ['#FFF1F2', '#BE123C'], ['#F0F9FF', '#0369A1'],
+]
+
+function getInitials(name) {
+  if (!name) return '?'
+  const parts = name.trim().split(/\s+/)
+  return parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : name.slice(0, 2).toUpperCase()
+}
+
+function avatarStyle(name) {
+  const [background, color] = AVATAR_COLORS[(name?.charCodeAt(0) ?? 0) % AVATAR_COLORS.length]
+  return { background, color }
+}
 
 export default function Customers() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const showToast = useToast()
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
 
   useEffect(() => {
+    let active = true
+
     async function fetchCustomers() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('customers')
         .select('*')
         .eq('user_id', user.id)
         .order('name', { ascending: true })
+      if (!active) return
+      if (error) showToast('Kunde inte hämta kunder. Ladda om sidan.', 'error')
       setCustomers(data ?? [])
       setLoading(false)
     }
+
     fetchCustomers()
-  }, [user.id])
+    return () => { active = false }
+  }, [user.id, showToast])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -36,25 +62,6 @@ export default function Customers() {
       c.email?.toLowerCase().includes(q)
     )
   }, [customers, query])
-
-  function getInitials(name) {
-    if (!name) return '?'
-    const parts = name.trim().split(/\s+/)
-    return parts.length >= 2
-      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-      : name.slice(0, 2).toUpperCase()
-  }
-
-  const AVATAR_COLORS = [
-    '#EFF6FF:#1D4ED8', '#F0FDF4:#15803D', '#FFF7ED:#C2410C',
-    '#FDF4FF:#7E22CE', '#FFF1F2:#BE123C', '#F0F9FF:#0369A1',
-  ]
-
-  function avatarStyle(name) {
-    const idx = (name?.charCodeAt(0) ?? 0) % AVATAR_COLORS.length
-    const [bg, color] = AVATAR_COLORS[idx].split(':')
-    return { background: bg, color }
-  }
 
   return (
     <Page className="min-h-screen flex flex-col pb-20 md:pb-0">

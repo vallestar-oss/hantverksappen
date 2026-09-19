@@ -1,368 +1,362 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
-
-// ── constants ──────────────────────────────────────────────────────────────
-
-const PRIMARY       = [37, 99, 235]        // #2563EB
-const PRIMARY_LIGHT = [219, 234, 254]      // blue-100
-const SUCCESS       = [22, 163, 74]        // #16A34A
-const TEXT_DARK     = [17, 24, 39]         // gray-900
-const TEXT_MID      = [107, 114, 128]      // gray-500
-const TEXT_LIGHT    = [156, 163, 175]      // gray-400
-const BG_LIGHT      = [249, 250, 251]      // gray-50
-const BORDER        = [229, 231, 235]      // gray-200
-const AMBER_LIGHT   = [254, 243, 199]      // amber-100
-
-// ── helpers ────────────────────────────────────────────────────────────────
-
-/**
- * Replace Swedish characters that fall outside jsPDF's built-in Helvetica
- * Latin-1 subset with their closest ASCII equivalents.
- */
-function sanitizeText(str) {
-  if (str == null) return ''
-  return String(str)
-    .replace(/ä/g, 'a').replace(/Ä/g, 'A')
-    .replace(/å/g, 'a').replace(/Å/g, 'A')
-    .replace(/ö/g, 'o').replace(/Ö/g, 'O')
-}
-
-function formatSEK(n) {
-  return new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 2 }).format(n ?? 0) + ' kr'
-}
-
-function formatDate(iso) {
-  if (!iso) return '-'
-  return new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(iso))
-}
-
-function calcTotals(quoteItems, rotRutEnabled) {
-  const items = quoteItems ?? []
-  const subtotal = items.reduce((s, r) => s + (r.quantity ?? 0) * (r.unit_price ?? 0), 0)
-  const labourSubtotal = items
-    .filter(r => r.type === 'arbete')
-    .reduce((s, r) => s + (r.quantity ?? 0) * (r.unit_price ?? 0), 0)
-  const rotRutDeduction = rotRutEnabled ? labourSubtotal * 0.3 : 0
-  const vatByRate = {}
-  for (const r of items) {
-    const net = (r.quantity ?? 0) * (r.unit_price ?? 0)
-    vatByRate[r.vat_rate] = (vatByRate[r.vat_rate] ?? 0) + net * ((r.vat_rate ?? 25) / 100)
-  }
-  const totalVat = Object.values(vatByRate).reduce((s, v) => s + v, 0)
-  const totalInkMoms = subtotal + totalVat
-  const toPay = totalInkMoms - rotRutDeduction
-  return { subtotal, labourSubtotal, rotRutDeduction, vatByRate, totalVat, totalInkMoms, toPay }
-}
-
-async function loadImageAsDataUrl(url) {
-  try {
-    const response = await fetch(url)
-    const blob = await response.blob()
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result)
-      reader.onerror = reject
-      reader.readAsDataURL(blob)
-    })
-  } catch {
-    return null
-  }
-}
+import { applySwedishFont, safeText } from './pdfFont'
+import { calcTotals, lineNet, rotRutLabel, VAT_RATES } from './calc'
+import {
+  BLACK, LABEL, BORDER, DARK, ALT, WHITE, MARGIN_X, FOOTER_RESERVE,
+  formatMoney, formatPdfDate, momsregNr, maxDeductionText, loadImageAsDataUrl, measureImage, drawFooters,
+} from './pdfCommon'
 
 // ── main export ────────────────────────────────────────────────────────────
-
 export async function generateQuotePDF(quote, quoteItems, customer, companyProfile) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const doc   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()   // 210
   const pageH = doc.internal.pageSize.getHeight()  // 297
-  const margin = 15
+  const MX    = MARGIN_X
+  const CW    = pageW - 2 * MX   // 174 mm
+  const COL2X = MX + 108         // right-column x (~126 mm)
 
-  // Load logo if present
+  const font = await applySwedishFont(doc)
+  const t    = safeText(font)
+
+  // Load logo
   let logoDataUrl = null
-  const logoUrl = companyProfile?.logo_url?.split('?')[0]
-  if (logoUrl) logoDataUrl = await loadImageAsDataUrl(logoUrl)
+  if (companyProfile?.logo_url) {
+    logoDataUrl = await loadImageAsDataUrl(companyProfile.logo_url.split('?')[0])
+  }
 
-  // ── PAGE HEADER ────────────────────────────────────────────────────────────
+  function label(size = 7) {
+    doc.setFont(font, 'bold')
+    doc.setFontSize(size)
+    doc.setTextColor(...LABEL)
+    doc.setCharSpace(0.7)
+  }
+  function body(bold = false, color = BLACK) {
+    doc.setFont(font, bold ? 'bold' : 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(...color)
+    doc.setCharSpace(0)
+  }
 
-  let leftY = margin
+  // Starts a new page when fewer than `mm` millimetres remain above the footer.
+  let curY = 0
+  function ensureSpace(mm) {
+    if (curY + mm > pageH - FOOTER_RESERVE) {
+      doc.addPage()
+      curY = MX
+    }
+  }
 
-  // Logo
-  if (logoDataUrl) {
+  // ── HEADER ─────────────────────────────────────────────────────────────────
+
+  let leftY  = MX
+  let rightY = MX
+
+  // Logo top-left
+  const logoSize = logoDataUrl ? await measureImage(logoDataUrl) : null
+  if (logoSize) {
+    const PX_TO_MM = 0.264583
+    const logoH = Math.min(22, logoSize.height * PX_TO_MM)
+    const logoW = Math.min(logoH * (logoSize.width / logoSize.height), 65)
     try {
-      const img = new Image()
-      img.src = logoDataUrl
-      await new Promise(r => { img.onload = r; img.onerror = r })
-      const maxH = 25
-      const ratio = img.naturalWidth / img.naturalHeight
-      const logoH = Math.min(maxH, img.naturalHeight * 0.264583)
-      const logoW = logoH * ratio
-      doc.addImage(logoDataUrl, 'AUTO', margin, leftY, logoW, logoH)
-      leftY += logoH + 4
-    } catch { /* ignore */ }
+      doc.addImage(logoDataUrl, 'AUTO', MX, leftY, logoW, logoH)
+      leftY += logoH + 5
+    } catch {
+      // Unsupported image format (e.g. SVG): leave the logo out rather than fail the PDF.
+    }
   }
 
   // Company name
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(font, 'bold')
   doc.setFontSize(13)
-  doc.setTextColor(...TEXT_DARK)
-  doc.text(sanitizeText(companyProfile?.company_name), margin, leftY)
-  leftY += 6
+  doc.setTextColor(...BLACK)
+  doc.setCharSpace(0)
+  doc.text(t(companyProfile?.company_name ?? ''), MX, leftY)
+  leftY += 5.5
 
-  // Company address lines
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...TEXT_MID)
-
+  // Company detail lines
+  body(false, LABEL)
+  const momsreg = momsregNr(companyProfile?.org_number)
   const companyLines = [
     companyProfile?.address,
     [companyProfile?.postal_code, companyProfile?.city].filter(Boolean).join(' '),
     companyProfile?.phone,
     companyProfile?.email,
-    [
-      companyProfile?.org_number ? `Org.nr: ${companyProfile.org_number}` : null,
-      companyProfile?.f_skatt ? 'Innehar F-skattsedel' : null,
-    ].filter(Boolean).join(' | '),
+    companyProfile?.org_number ? `Org.nr: ${companyProfile.org_number}` : null,
+    companyProfile?.f_skatt ? 'F-skatt' : null,
+    momsreg ? `Momsreg.nr: ${momsreg}` : null,
   ].filter(Boolean)
-
   for (const line of companyLines) {
-    doc.text(sanitizeText(line), margin, leftY)
-    leftY += 4.5
+    doc.text(t(line), MX, leftY)
+    leftY += 4
   }
 
-  // ── RIGHT COLUMN: OFFERT heading ───────────────────────────────────────────
-
-  let rightY = margin
-
-  doc.setFont('helvetica', 'bold')
+  // "OFFERT" — black, large, top-right
+  doc.setFont(font, 'bold')
   doc.setFontSize(28)
-  doc.setTextColor(...PRIMARY)
-  doc.text('OFFERT', pageW - margin, rightY, { align: 'right' })
-  rightY += 10
+  doc.setTextColor(...BLACK)
+  doc.setCharSpace(1.5)
+  doc.text('OFFERT', pageW - MX, rightY, { align: 'right' })
+  doc.setCharSpace(0)
+  rightY += 9
 
   // Quote number
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(...TEXT_DARK)
-  doc.text(`Nr: ${quote.quote_number ?? '-'}`, pageW - margin, rightY, { align: 'right' })
-  rightY += 5.5
-
-  // Dates
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...TEXT_MID)
-  doc.text(sanitizeText(`Datum: ${formatDate(quote.created_at)}`), pageW - margin, rightY, { align: 'right' })
-  rightY += 4.5
-  doc.text(sanitizeText(`Giltig till: ${formatDate(quote.valid_until)}`), pageW - margin, rightY, { align: 'right' })
+  body(false, LABEL)
+  doc.text(t(`Nr ${quote.quote_number ?? '—'}`), pageW - MX, rightY, { align: 'right' })
   rightY += 5
 
-  // ROT/RUT badge
+  // ROT/RUT indicator — plain text
   if (quote.rot_rut_enabled) {
-    const badgeLabel = (quote.rot_rut_type ?? 'rot').toUpperCase() + '-avdrag'
-    const badgeW = doc.getTextWidth(sanitizeText(badgeLabel)) + 6
-    const badgeX = pageW - margin - badgeW
-    doc.setFillColor(...SUCCESS)
-    doc.roundedRect(badgeX, rightY - 4, badgeW, 6, 1, 1, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(255, 255, 255)
-    doc.text(sanitizeText(badgeLabel), badgeX + 3, rightY)
-    rightY += 7
+    body(false, LABEL)
+    doc.text(t(`${rotRutLabel(quote.rot_rut_type)}-avdrag`), pageW - MX, rightY, { align: 'right' })
+    rightY += 5
   }
 
   // Divider
-  const dividerY = Math.max(leftY, rightY) + 4
-  doc.setDrawColor(...PRIMARY_LIGHT)
+  const divY = Math.max(leftY, rightY) + 6
+  doc.setDrawColor(...BORDER)
   doc.setLineWidth(0.5)
-  doc.line(margin, dividerY, pageW - margin, dividerY)
+  doc.line(MX, divY, pageW - MX, divY)
+  curY = divY + 8
 
-  let curY = dividerY + 7
+  // ── BUYER + DATES (two columns) ────────────────────────────────────────────
 
-  // ── CUSTOMER SECTION ───────────────────────────────────────────────────────
+  let buyerY = curY
+  let datesY = curY
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(...TEXT_LIGHT)
-  doc.text('KUND', margin, curY)
-  curY += 5
+  // Left: label
+  label()
+  doc.text('KUND', MX, buyerY)
+  doc.setCharSpace(0)
+  buyerY += 5
 
-  doc.setFont('helvetica', 'bold')
+  // Left: Customer name
+  doc.setFont(font, 'bold')
   doc.setFontSize(11)
-  doc.setTextColor(...TEXT_DARK)
-  doc.text(sanitizeText(customer?.name), margin, curY)
-  curY += 5.5
+  doc.setTextColor(...BLACK)
+  doc.text(t(customer?.name ?? '—'), MX, buyerY)
+  buyerY += 5.5
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(...TEXT_MID)
-
-  const customerLines = [
+  // Left: Customer address
+  body(false, LABEL)
+  const custLines = [
     customer?.address,
     [customer?.postal_code, customer?.city].filter(Boolean).join(' '),
     customer?.phone,
     customer?.email,
   ].filter(Boolean)
-
-  for (const line of customerLines) {
-    doc.text(sanitizeText(line), margin, curY)
-    curY += 4.5
+  for (const line of custLines) {
+    doc.text(t(line), MX, buyerY)
+    buyerY += 4.5
   }
 
-  curY += 5
+  // Right: OFFERTDATUM
+  label()
+  doc.text('OFFERTDATUM', COL2X, datesY)
+  doc.setCharSpace(0)
+  datesY += 4.5
+  body(false, BLACK)
+  doc.text(t(formatPdfDate(quote.created_at)), COL2X, datesY)
+  datesY += 7.5
+
+  // Right: GILTIG TILL
+  label()
+  doc.text(t('GILTIG TILL'), COL2X, datesY)
+  doc.setCharSpace(0)
+  datesY += 4.5
+  body(false, BLACK)
+  doc.text(t(formatPdfDate(quote.valid_until)), COL2X, datesY)
+  datesY += 5
+
+  curY = Math.max(buyerY, datesY) + 9
 
   // ── LINE ITEMS TABLE ───────────────────────────────────────────────────────
 
+  const rotRutEnabled = quote.rot_rut_enabled
   const tableRows = (quoteItems ?? []).map(item => [
-    sanitizeText(item.description) || '-',
-    item.type === 'arbete' ? 'Arbete' : 'Material',
+    t(item.description) || '—',
+    item.type === 'arbete' ? t('Arbete') : t('Material'),
     String(item.quantity ?? 0),
     item.unit ?? 'st',
-    formatSEK(item.unit_price ?? 0),
-    `${item.vat_rate ?? 25}%`,
-    formatSEK((item.quantity ?? 0) * (item.unit_price ?? 0)),
+    formatMoney(item.unit_price ?? 0),
+    `${item.vat_rate ?? 25} %`,
+    formatMoney(lineNet(item)),
   ])
+
+  doc.setFont(font, 'normal')
+  doc.setCharSpace(0)
 
   autoTable(doc, {
     startY: curY,
-    margin: { left: margin, right: margin },
-    head: [['Beskrivning', 'Typ', 'Antal', 'Enhet', 'A-pris', 'Moms', 'Summa']],
+    margin: { left: MX, right: MX },
+    head: [[
+      t('Beskrivning'), t('Typ'), t('Antal'), t('Enhet'),
+      t('À-pris'), t('Moms'), t('Summa'),
+    ]],
     body: tableRows,
     styles: {
-      fontSize: 9,
-      cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
-      textColor: TEXT_DARK,
+      font,
+      fontSize: 8.5,
+      cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 },
+      textColor: BLACK,
       lineColor: BORDER,
-      lineWidth: 0.1,
+      lineWidth: { top: 0, right: 0, bottom: 0.3, left: 0 },
     },
     headStyles: {
-      fillColor: PRIMARY,
-      textColor: [255, 255, 255],
+      font,
+      fillColor: WHITE,
+      textColor: BLACK,
       fontStyle: 'bold',
-      fontSize: 8.5,
+      fontSize: 8,
+      lineColor: DARK,
+      lineWidth: { top: 0, right: 0, bottom: 0.5, left: 0 },
     },
-    alternateRowStyles: { fillColor: BG_LIGHT },
+    alternateRowStyles: { fillColor: ALT },
     columnStyles: {
       0: { cellWidth: 'auto' },
-      1: { cellWidth: 24, halign: 'center' },
-      2: { cellWidth: 18, halign: 'right' },
-      3: { cellWidth: 18, halign: 'center' },
+      1: { cellWidth: 22, halign: 'center', textColor: LABEL },
+      2: { cellWidth: 16, halign: 'right' },
+      3: { cellWidth: 16, halign: 'center' },
       4: { cellWidth: 26, halign: 'right' },
-      5: { cellWidth: 18, halign: 'center' },
+      5: { cellWidth: 16, halign: 'center', textColor: LABEL },
       6: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
-    },
-    willDrawCell(data) {
-      if (quote.rot_rut_enabled && data.section === 'body') {
-        const typeCell = data.row.cells[1]
-        if (typeCell?.text?.[0] === 'Arbete') {
-          doc.setFillColor(...AMBER_LIGHT)
-        }
-      }
-    },
-    didDrawCell(data) {
-      if (data.section === 'body' && data.column.index === 1) {
-        const val = data.cell.text[0]
-        doc.setTextColor(...(val === 'Arbete' ? PRIMARY : TEXT_MID))
-      }
     },
   })
 
-  curY = doc.lastAutoTable.finalY + 8
+  curY = doc.lastAutoTable.finalY + 10
 
   // ── SUMMARY ────────────────────────────────────────────────────────────────
 
-  const { subtotal, rotRutDeduction, vatByRate, totalInkMoms, toPay } = calcTotals(
-    quoteItems,
-    quote.rot_rut_enabled
-  )
+  const { subtotal, labourInclVat, rotRutDeduction, vatByRate, totalInkMoms, toPay } =
+    calcTotals(quoteItems, rotRutEnabled)
+  const rrLabel = rotRutLabel(quote.rot_rut_type)
 
-  const summaryX = pageW / 2 + 10
-  const summaryW = pageW - margin - summaryX
+  ensureSpace(70)
+  const sumX = MX + 92
+  const sumW = pageW - MX - sumX   // ~82 mm
 
-  function summaryLine(label, value, opts = {}) {
-    const { bold = false, color = TEXT_MID, valueColor = TEXT_DARK } = opts
-    doc.setFont('helvetica', bold ? 'bold' : 'normal')
+  function summaryRow(lbl, val, bold = false, lblColor = LABEL, valColor = BLACK) {
+    doc.setFont(font, bold ? 'bold' : 'normal')
     doc.setFontSize(9)
-    doc.setTextColor(...color)
-    doc.text(sanitizeText(label), summaryX, curY)
-    doc.setTextColor(...valueColor)
-    doc.text(sanitizeText(value), summaryX + summaryW, curY, { align: 'right' })
+    doc.setCharSpace(0)
+    doc.setTextColor(...lblColor)
+    doc.text(t(lbl), sumX, curY)
+    doc.setTextColor(...valColor)
+    doc.text(val, sumX + sumW, curY, { align: 'right' })
     curY += 5
   }
 
-  summaryLine('Delsumma ex. moms', formatSEK(subtotal))
-
-  if (quote.rot_rut_enabled && rotRutDeduction > 0) {
-    const label = `${(quote.rot_rut_type ?? 'rot').toUpperCase()}-avdrag (30% arbete)`
-    summaryLine(label, `- ${formatSEK(rotRutDeduction)}`, { color: SUCCESS, valueColor: SUCCESS, bold: true })
+  function hRule(color = BORDER, w = 0.3) {
+    doc.setDrawColor(...color)
+    doc.setLineWidth(w)
+    doc.line(sumX, curY - 1.5, sumX + sumW, curY - 1.5)
+    curY += 1.5
   }
 
-  doc.setDrawColor(...BORDER)
-  doc.setLineWidth(0.2)
-  doc.line(summaryX, curY - 1, summaryX + summaryW, curY - 1)
-  curY += 1
+  summaryRow('Delsumma ex. moms', formatMoney(subtotal))
 
-  const usedRates = [25, 12, 6].filter(r => (vatByRate[r] ?? 0) > 0)
-  for (const r of usedRates) {
-    summaryLine(`Moms ${r}%`, formatSEK(vatByRate[r]))
+  hRule()
+
+  for (const r of VAT_RATES.filter(rate => (vatByRate[rate] ?? 0) > 0)) {
+    summaryRow(t(`Moms ${r} %`), formatMoney(vatByRate[r]))
   }
 
-  doc.line(summaryX, curY - 1, summaryX + summaryW, curY - 1)
+  hRule()
+  summaryRow('Totalt ink. moms', formatMoney(totalInkMoms), true, BLACK, BLACK)
+
+  if (rotRutEnabled && rotRutDeduction > 0) {
+    summaryRow(t(`${rrLabel}-avdrag (30 % av arbete)`), `- ${formatMoney(rotRutDeduction)}`)
+  }
+
+  // "Offertpris" — bold, no fill
+  curY += 3
+  hRule(BLACK, 0.5)
   curY += 1
-  summaryLine('Totalt ink. moms', formatSEK(totalInkMoms), { bold: true, color: TEXT_DARK })
 
-  curY += 2
-
-  // "Att betala" prominent row
-  const toPayLabel = sanitizeText(quote.rot_rut_enabled ? 'Att betala efter ROT/RUT' : 'Att betala')
-  doc.setFillColor(...PRIMARY_LIGHT)
-  doc.roundedRect(summaryX - 3, curY - 4.5, summaryW + 3, 9, 1, 1, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(...PRIMARY)
-  doc.text(toPayLabel, summaryX, curY)
-  doc.text(formatSEK(toPay), summaryX + summaryW, curY, { align: 'right' })
-  curY += 10
+  const toPayLabel = rotRutEnabled
+    ? t('Offertpris efter ROT/RUT')
+    : t('Offertpris')
+  doc.setFont(font, 'bold')
+  doc.setFontSize(10.5)
+  doc.setCharSpace(0)
+  doc.setTextColor(...BLACK)
+  doc.text(toPayLabel, sumX, curY + 5)
+  doc.text(formatMoney(toPay), sumX + sumW, curY + 5, { align: 'right' })
+  curY += 14
 
   // Notes
   if (quote.notes) {
+    ensureSpace(20)
+    label()
+    doc.text('ANTECKNINGAR', MX, curY)
+    doc.setCharSpace(0)
+    curY += 5
+    body(false, LABEL)
+    const noteLines = doc.splitTextToSize(t(quote.notes), CW)
+    doc.text(noteLines, MX, curY)
+    curY += noteLines.length * 4.5 + 6
+  }
+
+  // ── ROT/RUT INFORMATION ────────────────────────────────────────────────────
+
+  if (rotRutEnabled) {
+    ensureSpace(55)
     curY += 2
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(...TEXT_LIGHT)
-    doc.text('ANTECKNINGAR', margin, curY)
-    curY += 4.5
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    doc.setTextColor(...TEXT_MID)
-    const noteLines = doc.splitTextToSize(sanitizeText(quote.notes), pageW - 2 * margin)
-    doc.text(noteLines, margin, curY)
-    curY += noteLines.length * 4.5 + 4
+    doc.setDrawColor(...BORDER)
+    doc.setLineWidth(0.5)
+    doc.line(MX, curY, pageW - MX, curY)
+    curY += 6
+
+    label()
+    doc.text(t(`${rrLabel}-INFORMATION`), MX, curY)
+    doc.setCharSpace(0)
+    curY += 5.5
+
+    const maxAmount = maxDeductionText(quote.rot_rut_type)
+    const rrText = t(
+      `Offerten inkluderar ${rrLabel}-avdrag. Kunden betalar reducerat belopp och ` +
+      `hantverkaren ansöker om utbetalning från Skatteverket för mellanskillnaden. ` +
+      `Maxbelopp: ${maxAmount} kr per person och år.`
+    )
+    body(false, LABEL)
+    const rrLines = doc.splitTextToSize(rrText, CW)
+    doc.text(rrLines, MX, curY)
+    curY += rrLines.length * 4.5 + 5
+
+    doc.setFont(font, 'normal')
+    doc.setCharSpace(0)
+
+    autoTable(doc, {
+      startY: curY,
+      margin: { left: MX, right: MX },
+      body: [
+        [t('Arbetskostnad inkl. moms'), formatMoney(labourInclVat)],
+        [t(`Skattereduktion 30 % (${rrLabel})`), `- ${formatMoney(rotRutDeduction)}`],
+        [t('Kundens andel att betala'), formatMoney(toPay)],
+      ],
+      styles: {
+        font,
+        fontSize: 8.5,
+        cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 4 },
+        textColor: BLACK,
+        lineColor: BORDER,
+        lineWidth: { top: 0, right: 0, bottom: 0.3, left: 0 },
+      },
+      columnStyles: {
+        0: { cellWidth: 'auto' },
+        1: { cellWidth: 42, halign: 'right', fontStyle: 'bold' },
+      },
+    })
+
+    curY = doc.lastAutoTable.finalY + 8
   }
 
   // ── FOOTER ─────────────────────────────────────────────────────────────────
 
-  const footerY = pageH - 18
-  doc.setDrawColor(...PRIMARY_LIGHT)
-  doc.setLineWidth(0.4)
-  doc.line(margin, footerY - 3, pageW - margin, footerY - 3)
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.setTextColor(...TEXT_LIGHT)
-
-  const footerLeft = sanitizeText([
-    'Betalningsvillkor: 30 dagar netto',
-    companyProfile?.bankgiro ? `Bankgiro: ${companyProfile.bankgiro}` : null,
-    'Tack for ditt fortroende!',
-  ].filter(Boolean).join('   .   '))
-
-  doc.text(footerLeft, margin, footerY)
-
-  const pageCount = doc.internal.getNumberOfPages()
-  doc.text(`Sida 1 av ${pageCount}`, pageW - margin, footerY, { align: 'right' })
+  drawFooters(doc, font, t('Tack för ditt förtroende!'))
 
   // ── SAVE ───────────────────────────────────────────────────────────────────
 
-  const filename = `Offert-${quote.quote_number ?? quote.id}.pdf`
-  doc.save(filename)
+  doc.save(`Offert-${quote.quote_number ?? quote.id}.pdf`)
   return doc
 }

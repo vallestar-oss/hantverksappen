@@ -1,13 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams, Link, useLocation } from 'react-router-dom'
 import { SkeletonPage } from '../components/Skeleton'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
-import { generateInvoicePDF } from '../utils/generateInvoicePDF'
+import { useAuth } from '../hooks/useAuth'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
+import { useToast } from '../hooks/useToast'
 import Page, { Noise } from '../components/Premium'
 import ActivityLog from '../components/ActivityLog'
-import { useToast } from '../components/Toast'
+import { Card } from '../components/FormField'
+import { TotalsSummary } from '../components/DocumentBuilder'
+import { formatSEK, pluralize } from '../lib/format'
+import { formatDate, todayISO, daysBetween } from '../lib/date'
+import { calcTotals, lineNet, rotRutLabel } from '../utils/calc'
 import {
   ChevronLeft, Pencil, AlertTriangle, Check, Phone, Mail,
   Download, Bell, Trash2, Loader2, Landmark,
@@ -15,48 +19,11 @@ import {
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-function todayISO() { return new Date().toISOString().slice(0, 10) }
-
-function formatDate(iso) {
-  if (!iso) return '–'
-  return new Intl.DateTimeFormat('sv-SE', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  }).format(new Date(iso))
-}
-
-function formatSEK(n) {
-  return new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 2 }).format(n ?? 0) + ' kr'
-}
-
-function daysOverdue(dueDateISO) {
-  const due = new Date(dueDateISO)
-  const today = new Date(todayISO())
-  return Math.floor((today - due) / (1000 * 60 * 60 * 24))
-}
-
 function effectiveStatus(invoice) {
   if (invoice.status === 'obetald' && invoice.due_date && invoice.due_date < todayISO()) {
     return 'försenad'
   }
   return invoice.status ?? 'obetald'
-}
-
-function calcTotals(items, rotRutEnabled) {
-  const list = items ?? []
-  const subtotal = list.reduce((s, r) => s + (r.quantity ?? 0) * (r.unit_price ?? 0), 0)
-  const labourSubtotal = list
-    .filter(r => r.type === 'arbete')
-    .reduce((s, r) => s + (r.quantity ?? 0) * (r.unit_price ?? 0), 0)
-  const rotRutDeduction = rotRutEnabled ? labourSubtotal * 0.3 : 0
-  const vatByRate = {}
-  for (const r of list) {
-    const net = (r.quantity ?? 0) * (r.unit_price ?? 0)
-    vatByRate[r.vat_rate] = (vatByRate[r.vat_rate] ?? 0) + net * ((r.vat_rate ?? 25) / 100)
-  }
-  const totalVat = Object.values(vatByRate).reduce((s, v) => s + v, 0)
-  const totalInkMoms = subtotal + totalVat
-  const toPay = totalInkMoms - rotRutDeduction
-  return { subtotal, labourSubtotal, rotRutDeduction, vatByRate, totalVat, totalInkMoms, toPay }
 }
 
 // ── status config ──────────────────────────────────────────────────────────
@@ -66,8 +33,6 @@ const STATUS_CONFIG = {
   betald:   { label: 'Betald',   bg: 'bg-green-50',  text: 'text-success',  border: 'border-green-100',  dot: 'bg-success' },
   försenad: { label: 'Försenad', bg: 'bg-red-50',    text: 'text-danger',   border: 'border-red-100',    dot: 'bg-danger' },
 }
-
-const VAT_RATES = [25, 12, 6]
 
 // ── component ──────────────────────────────────────────────────────────────
 
@@ -89,15 +54,21 @@ export default function InvoiceDetail() {
   const { confirmDialog, confirm } = useConfirmDialog()
 
   useEffect(() => {
+    let active = true
+
     async function load() {
-      const { data, error: err } = await supabase
+      const { data } = await supabase
         .from('invoices')
         .select('*, customers(*), jobs(id, title)')
         .eq('id', id)
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
+      if (!active) return
 
-      if (err || !data) { navigate('/invoices'); return }
+      if (!data) {
+        navigate('/invoices', { replace: true })
+        return
+      }
 
       const [{ data: itemData }, { data: profileData }] = await Promise.all([
         supabase
@@ -105,29 +76,32 @@ export default function InvoiceDetail() {
           .select('*')
           .eq('invoice_id', id)
           .order('created_at', { ascending: true }),
-        supabase
-          .from('company_profiles')
-          .select('*')
-          .eq('user_id', user.id)
-          .single(),
+        supabase.from('company_profiles').select('*').eq('user_id', user.id).maybeSingle(),
       ])
+      if (!active) return
 
       setInvoice(data)
       setItems(itemData ?? [])
       setProfile(profileData ?? null)
       setLoading(false)
     }
+
     load()
+    return () => { active = false }
   }, [id, user.id, navigate])
 
-  // Saved from edit/create flow — show as toast, then clear the state
+  // Arrived from the create/edit flow — confirm with a toast, then clear the navigation state.
   useEffect(() => {
     if (location.state?.saved === true) {
       showToast('Fakturan sparades', 'success')
-      window.history.replaceState({}, '')
+      navigate(location.pathname, { replace: true, state: null })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [location, navigate, showToast])
+
+  const totals = useMemo(
+    () => calcTotals(items, invoice?.rot_rut_enabled),
+    [items, invoice?.rot_rut_enabled],
+  )
 
   async function handleMarkPaid() {
     setPaying(true)
@@ -146,7 +120,7 @@ export default function InvoiceDetail() {
 
     if (err) {
       setError('Kunde inte uppdatera fakturan. Försök igen.')
-      showToast('Något gick fel', 'error')
+      showToast('Något gick fel. Försök igen.', 'error')
     } else {
       setInvoice(prev => ({ ...prev, ...patch }))
       showToast('Fakturan markerades som betald', 'success')
@@ -181,18 +155,16 @@ export default function InvoiceDetail() {
 
   async function handleDownloadPDF() {
     setPdfLoading(true)
+    setError('')
     try {
-      const { data: profile } = await supabase
-        .from('company_profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
+      // jsPDF is large, so it is only fetched when a PDF is actually requested.
+      const { generateInvoicePDF } = await import('../utils/generateInvoicePDF')
       await generateInvoicePDF(invoice, items, invoice.customers, profile)
-    } catch (e) {
-      console.error('PDF error:', e)
-      setError('Kunde inte generera PDF. Försök igen.')
+    } catch {
+      setError('Kunde inte skapa PDF:en. Försök igen.')
+    } finally {
+      setPdfLoading(false)
     }
-    setPdfLoading(false)
   }
 
   // ── loading ────────────────────────────────────────────────────────────
@@ -201,10 +173,9 @@ export default function InvoiceDetail() {
 
   const status = effectiveStatus(invoice)
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.obetald
-  const totals = calcTotals(items, invoice.rot_rut_enabled)
   const isPaid = invoice.status === 'betald'
   const isOverdue = status === 'försenad'
-  const overdueDays = isOverdue ? daysOverdue(invoice.due_date) : 0
+  const overdueDays = isOverdue ? daysBetween(invoice.due_date, todayISO()) : 0
 
   return (
     <>
@@ -276,7 +247,7 @@ export default function InvoiceDetail() {
           {isOverdue && (
             <p className="text-sm text-red-300 mt-1 font-medium flex items-center gap-1.5">
               <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-              Förföll {formatDate(invoice.due_date)} — försenad med {overdueDays} {overdueDays === 1 ? 'dag' : 'dagar'}
+              Förföll {formatDate(invoice.due_date)} — försenad med {pluralize(overdueDays, 'dag', 'dagar')}
             </p>
           )}
         </div>
@@ -344,7 +315,7 @@ export default function InvoiceDetail() {
               {formatDate(invoice.due_date)}
               {isOverdue && (
                 <span className="ml-2 text-xs font-semibold bg-red-100 text-danger px-1.5 py-0.5 rounded-full">
-                  {overdueDays} {overdueDays === 1 ? 'dag' : 'dagar'} sen
+                  {pluralize(overdueDays, 'dag', 'dagar')} sen
                 </span>
               )}
             </span>
@@ -359,7 +330,7 @@ export default function InvoiceDetail() {
           {invoice.rot_rut_enabled && (
             <DetailRow label="ROT/RUT">
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-success">
-                {(invoice.rot_rut_type ?? 'rot').toUpperCase()}-avdrag
+                {rotRutLabel(invoice.rot_rut_type)}-avdrag
               </span>
             </DetailRow>
           )}
@@ -386,14 +357,14 @@ export default function InvoiceDetail() {
                 </thead>
                 <tbody>
                   {items.map(item => {
-                    const rowTotal = (item.quantity ?? 0) * (item.unit_price ?? 0)
+                    const rowTotal = lineNet(item)
                     const isArbete = item.type === 'arbete'
                     return (
                       <tr key={item.id}
                         className={`border-b border-gray-100 last:border-0 ${invoice.rot_rut_enabled && isArbete ? 'bg-amber-50/40' : ''}`}>
                         <td className="py-2.5 pr-2">
                           <span className="text-gray-800 font-medium">{item.description || '–'}</span>
-                          <span className="block text-xs text-gray-400">Moms {item.vat_rate ?? 25}%</span>
+                          <span className="block text-xs text-gray-400">Moms {item.vat_rate ?? 25} %</span>
                         </td>
                         <td className="py-2.5 px-2 text-center">
                           <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${
@@ -420,42 +391,12 @@ export default function InvoiceDetail() {
         )}
 
         {/* ── Sammanställning ── */}
-        <Card title="Sammanställning">
-          <div className="space-y-2 text-sm">
-            <SummaryRow label="Delsumma ex. moms" value={formatSEK(totals.subtotal)} />
-
-            {invoice.rot_rut_enabled && totals.rotRutDeduction > 0 && (
-              <SummaryRow
-                label={`${(invoice.rot_rut_type ?? 'rot').toUpperCase()}-avdrag (30% av arbete)`}
-                value={`- ${formatSEK(totals.rotRutDeduction)}`}
-                valueClass="text-success font-semibold"
-              />
-            )}
-
-            <div className="border-t border-gray-200 pt-2 space-y-2">
-              {VAT_RATES.filter(r => (totals.vatByRate[r] ?? 0) > 0).map(r => (
-                <SummaryRow key={r} label={`Moms ${r}%`} value={formatSEK(totals.vatByRate[r])} />
-              ))}
-            </div>
-
-            <div className="border-t border-gray-200 pt-2">
-              <SummaryRow label="Totalt ink. moms" value={formatSEK(totals.totalInkMoms)} />
-            </div>
-
-            {/* Total — distinct dark surface, document-grade */}
-            <div className="relative overflow-hidden rounded-xl mt-3 -mx-1" style={{ background: '#111111' }}>
-              <Noise />
-              <div className="relative px-4 py-4 flex justify-between items-center gap-3">
-                <span className="font-semibold text-white text-sm">
-                  {invoice.rot_rut_enabled ? 'Att betala efter ROT/RUT' : 'Att betala'}
-                </span>
-                <span className={`font-extrabold text-2xl tabular-nums ${isPaid ? 'text-green-400' : 'text-white'}`} style={{ letterSpacing: '-0.02em' }}>
-                  {formatSEK(totals.toPay)}
-                </span>
-              </div>
-            </div>
-          </div>
-        </Card>
+        <TotalsSummary
+          totals={totals}
+          rotRutEnabled={invoice.rot_rut_enabled}
+          rotRutType={invoice.rot_rut_type}
+          amountClass={isPaid ? 'text-green-400' : 'text-white'}
+        />
 
         {/* ── Betalningsinformation ── */}
         <Card title="Betalningsinformation">
@@ -508,7 +449,7 @@ export default function InvoiceDetail() {
           )}
         </Card>
 
-        {error && <p className="text-sm text-danger px-1">{error}</p>}
+        {error && <p role="alert" className="text-sm text-danger px-1">{error}</p>}
 
         {/* ── Ladda ner PDF ── */}
         <button onClick={handleDownloadPDF} disabled={pdfLoading}
@@ -546,7 +487,7 @@ export default function InvoiceDetail() {
               label: 'Markerad som betald', date: invoice.updated_at ?? invoice.paid_date,
             },
             isOverdue && {
-              label: `Förföll — ${overdueDays} ${overdueDays === 1 ? 'dag' : 'dagar'} sedan`,
+              label: `Förföll — ${pluralize(overdueDays, 'dag', 'dagar')} sedan`,
               date: invoice.due_date,
             },
           ].filter(Boolean)}
@@ -569,29 +510,11 @@ export default function InvoiceDetail() {
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
-function Card({ title, children }) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{title}</h2>
-      {children}
-    </div>
-  )
-}
-
 function DetailRow({ label, children }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</span>
       {children}
-    </div>
-  )
-}
-
-function SummaryRow({ label, value, valueClass = 'text-gray-700' }) {
-  return (
-    <div className="flex justify-between items-baseline">
-      <span className="text-gray-500">{label}</span>
-      <span className={`font-medium tabular-nums ${valueClass}`}>{value}</span>
     </div>
   )
 }

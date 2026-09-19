@@ -1,1039 +1,1100 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, MotionConfig, useReducedMotion } from 'framer-motion'
 import {
   FileText, Briefcase, Receipt, ArrowRight,
   Check, Wrench, Menu, X,
 } from 'lucide-react'
 
-// ─── Motion helpers ────────────────────────────────────────────────────────────
+// ─── Shared CSS ───────────────────────────────────────────────────────────────
 
-const EASE = [0.22, 1, 0.36, 1]
+const HOME_CSS = `
+  :root {
+    --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  }
 
-function up(delay = 0) {
+  /* Button press: origin-aware scale */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #0055FF;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 14px 28px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    transition:
+      transform 140ms var(--ease-out-strong),
+      background-color 160ms var(--ease-out-strong),
+      box-shadow 160ms var(--ease-out-strong);
+  }
+  .btn-primary:active { transform: scale(0.97); }
+  @media (hover: hover) and (pointer: fine) {
+    .btn-primary:hover {
+      background: #0044CC;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(0,85,255,0.28);
+    }
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #F5F5F5;
+    color: #111;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 14px 28px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    transition: transform 140ms var(--ease-out-strong), background-color 160ms var(--ease-out-strong);
+  }
+  .btn-secondary:active { transform: scale(0.97); }
+  @media (hover: hover) and (pointer: fine) {
+    .btn-secondary:hover { background: #EBEBEB; }
+  }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    color: rgba(255,255,255,0.6);
+    font-size: 15px;
+    font-weight: 500;
+    padding: 14px 28px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.12);
+    cursor: pointer;
+    transition: transform 140ms var(--ease-out-strong), background-color 160ms var(--ease-out-strong), color 160ms;
+  }
+  .btn-ghost:active { transform: scale(0.97); }
+  @media (hover: hover) and (pointer: fine) {
+    .btn-ghost:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); }
+  }
+
+  /* Mobile: hide product preview sidebar so content area has room */
+  @media (max-width: 767px) {
+    .preview-sidebar { display: none !important; }
+    .preview-window  { max-width: 100%; }
+  }
+
+  /* Marquee */
+  @keyframes marquee-scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  .marquee-track {
+    display: flex;
+    width: max-content;
+    animation: marquee-scroll 28s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-track { animation: none; }
+  }
+
+  /* Nav link hover */
+  .nav-link {
+    font-size: 14px;
+    font-weight: 500;
+    color: #666;
+    text-decoration: none;
+    transition: color 150ms;
+  }
+  .nav-link:hover { color: #111; }
+
+  /* Pricing button */
+  .btn-plan-featured {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    background: #fff;
+    color: #0055FF;
+    border: none;
+    cursor: pointer;
+    transition: transform 140ms var(--ease-out-strong), box-shadow 140ms var(--ease-out-strong);
+  }
+  .btn-plan-featured:active { transform: scale(0.97); }
+  @media (hover: hover) and (pointer: fine) {
+    .btn-plan-featured:hover { box-shadow: 0 4px 16px rgba(255,255,255,0.25); }
+  }
+
+  .btn-plan {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    background: #111;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: transform 140ms var(--ease-out-strong), background-color 140ms;
+  }
+  .btn-plan:active { transform: scale(0.97); }
+  @media (hover: hover) and (pointer: fine) {
+    .btn-plan:hover { background: #222; }
+  }
+
+  /* Keyboard focus — visible outline for all interactive elements */
+  .btn-primary:focus-visible,
+  .btn-secondary:focus-visible,
+  .btn-ghost:focus-visible,
+  .btn-plan:focus-visible,
+  .btn-plan-featured:focus-visible,
+  .nav-link:focus-visible {
+    outline: 2px solid #0055FF;
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+`
+
+// ─── Motion helpers ───────────────────────────────────────────────────────────
+
+const EASE = [0.23, 1, 0.32, 1]
+
+function fadeUp(delay = 0, y = 22) {
   return {
-    initial: { opacity: 0, y: 18 },
+    initial: { opacity: 0, y },
     whileInView: { opacity: 1, y: 0 },
-    viewport: { once: true, margin: '-48px' },
+    viewport: { once: true, margin: '-56px' },
+    transition: { duration: 0.65, delay, ease: EASE },
+  }
+}
+
+function fadeIn(delay = 0) {
+  return {
+    initial: { opacity: 0 },
+    whileInView: { opacity: 1 },
+    viewport: { once: true, margin: '-56px' },
     transition: { duration: 0.55, delay, ease: EASE },
   }
 }
 
-function fade(delay = 0) {
-  return {
-    initial: { opacity: 0 },
-    whileInView: { opacity: 1 },
-    viewport: { once: true, margin: '-48px' },
-    transition: { duration: 0.5, delay, ease: EASE },
-  }
-}
+// ─── Product preview ──────────────────────────────────────────────────────────
 
-// ─── Divider ───────────────────────────────────────────────────────────────────
+const JOBS = [
+  { customer: 'Svenssons Fastighet AB', type: 'VVS',     amount: '34 500 kr', status: 'Pågående',       sc: '#0055FF', sb: '#EEF4FF' },
+  { customer: 'Lindqvist Villa',         type: 'El',      amount: '18 900 kr', status: 'Offert skickad', sc: '#D97706', sb: '#FFF8EE' },
+  { customer: 'Bergstrom och Co',        type: 'Målning', amount: '9 200 kr',  status: 'Klart',          sc: '#16A34A', sb: '#F0FFF4' },
+  { customer: 'Nilsson Bostad',          type: 'Snickeri',amount: '22 700 kr', status: 'Fakturerat',     sc: '#777',    sb: '#F5F5F5' },
+]
 
-function HR() {
-  return <hr className="border-slate-100" />
-}
-
-// ─── Eyebrow label ─────────────────────────────────────────────────────────────
-
-function Eyebrow({ children }) {
+function ProductPreview() {
   return (
-    <p className="inline-flex items-center gap-2 text-[13px] font-semibold tracking-widest uppercase text-blue-600">
-      <span className="inline-block w-3.5 h-px bg-blue-600" />
-      {children}
-    </p>
-  )
-}
-
-// ─── Feature card ──────────────────────────────────────────────────────────────
-
-function FeatureCard({ icon: Icon, iconBg, title, description, delay }) {
-  return (
-    <motion.div {...up(delay)}
-      className="group bg-white rounded-xl border border-slate-100 p-8
-                 hover:border-slate-300 transition-all duration-300"
-    >
-      <div className={`inline-flex items-center justify-center w-11 h-11 rounded-xl mb-6 ${iconBg}`}>
-        <Icon className="w-5 h-5" />
-      </div>
-      <h3 className="text-[17px] font-semibold text-slate-900 mb-3 leading-snug">{title}</h3>
-      <p className="text-[15px] text-slate-500 leading-relaxed">{description}</p>
-    </motion.div>
-  )
-}
-
-// ─── Stat ──────────────────────────────────────────────────────────────────────
-
-function Stat({ value, label, delay }) {
-  return (
-    <motion.div {...up(delay)} className="text-center">
-      <p className="text-4xl sm:text-5xl font-bold text-white tabular-nums tracking-tight">{value}</p>
-      <p className="mt-2 text-[14px] text-slate-400 font-medium">{label}</p>
-    </motion.div>
-  )
-}
-
-// ─── Device mockups ────────────────────────────────────────────────────────────
-
-function LaptopMockup() {
-  return (
-    <div className="relative inline-block" style={{ width: 540, maxWidth: '100%' }}>
-      {/* Outer frame */}
+    <div className="relative" style={{ width: '100%', maxWidth: 580, flexShrink: 0 }}>
+      {/* Main window */}
       <div
-        className="relative rounded-xl overflow-hidden"
+        className="rounded-2xl overflow-hidden relative"
         style={{
-          background: 'linear-gradient(145deg, #d0d0d0 0%, #b8b8b8 50%, #c8c8c8 100%)',
-          padding: '10px 10px 0 10px',
-          boxShadow: '0 32px 64px rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.12)',
+          background: '#fff',
+          boxShadow:
+            '0 0 0 1px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.07), 0 32px 80px rgba(0,0,0,0.10)',
         }}
       >
-        {/* Screen bezel */}
+        {/* Browser chrome */}
         <div
-          className="rounded-t-lg overflow-hidden"
-          style={{ background: '#1a1a1a', padding: '6px 6px 0 6px' }}
+          className="flex items-center gap-1.5 px-4 py-3"
+          style={{ background: '#FAFAFA', borderBottom: '1px solid #E5E5E5' }}
         >
-          {/* Camera dot */}
-          <div className="flex justify-center mb-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-gray-600" />
-          </div>
-
-          {/* Screen content */}
+          <span className="w-3 h-3 rounded-full" style={{ background: '#FF6057' }} />
+          <span className="w-3 h-3 rounded-full" style={{ background: '#FEBC2E' }} />
+          <span className="w-3 h-3 rounded-full" style={{ background: '#29C740' }} />
           <div
-            className="rounded-t-sm overflow-hidden"
-            style={{ background: '#111111', aspectRatio: '16/10' }}
+            className="flex-1 mx-3 h-5 rounded flex items-center px-3"
+            style={{ background: '#EFEFEF' }}
           >
-            <div className="flex h-full">
-              {/* Sidebar */}
-              <div className="flex-shrink-0 flex flex-col gap-1 p-3" style={{ width: '18%', background: '#1a1a1a' }}>
-                {/* Logo area */}
-                <div className="flex items-center gap-1.5 mb-3 px-1">
-                  <div className="w-4 h-4 rounded bg-blue-600 flex-shrink-0" />
-                  <div className="h-2 rounded-full flex-1 bg-gray-700" />
-                </div>
-                {/* Nav items */}
-                {[true, false, false, false, false].map((active, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded"
-                    style={{ background: active ? '#0055FF22' : 'transparent' }}
-                  >
-                    <div
-                      className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
-                      style={{ background: active ? '#0055FF' : '#444' }}
-                    />
-                    <div
-                      className="h-1.5 rounded-full flex-1"
-                      style={{ background: active ? '#0055FF88' : '#333' }}
-                    />
-                  </div>
-                ))}
-              </div>
-
-              {/* Content area */}
-              <div className="flex-1 p-3 overflow-hidden" style={{ background: '#F8F8F8' }}>
-                {/* Top bar */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="h-3 w-20 rounded-full bg-gray-800 opacity-80" />
-                  <div className="h-5 w-16 rounded-md" style={{ background: '#0055FF' }} />
-                </div>
-
-                {/* Stat cards */}
-                <div className="grid grid-cols-4 gap-1.5 mb-3">
-                  {[
-                    { bg: '#EEF4FF', accent: '#0055FF' },
-                    { bg: '#FFF8EE', accent: '#F59E0B' },
-                    { bg: '#F0FFF4', accent: '#22C55E' },
-                    { bg: '#F5F5F5', accent: '#94A3B8' },
-                  ].map((c, i) => (
-                    <div key={i} className="rounded-lg p-2" style={{ background: c.bg }}>
-                      <div className="w-3 h-3 rounded-sm mb-1.5" style={{ background: c.accent, opacity: 0.8 }} />
-                      <div className="h-2.5 w-8 rounded-full mb-1" style={{ background: c.accent, opacity: 0.7 }} />
-                      <div className="h-1.5 w-12 rounded-full" style={{ background: c.accent, opacity: 0.25 }} />
-                    </div>
-                  ))}
-                </div>
-
-                {/* List rows */}
-                <div className="space-y-1.5">
-                  {[
-                    { dot: '#0055FF', w1: 32, w2: 24 },
-                    { dot: '#22C55E', w1: 44, w2: 32 },
-                    { dot: '#F59E0B', w1: 28, w2: 20 },
-                    { dot: '#94A3B8', w1: 38, w2: 28 },
-                  ].map((row, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-2 rounded-lg px-2 py-1.5"
-                      style={{ background: 'white', border: '1px solid #E5E7EB' }}
-                    >
-                      <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: row.dot }} />
-                      <div className="flex-1 flex gap-2">
-                        <div className="h-2 rounded-full" style={{ width: row.w1, background: '#374151' }} />
-                        <div className="h-2 rounded-full" style={{ width: row.w2, background: '#D1D5DB' }} />
-                      </div>
-                      <div className="h-2 w-10 rounded-full" style={{ background: '#E5E7EB' }} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <span style={{ fontSize: 11, color: '#999', fontWeight: 500 }}>
+              app.hantverksappen.se/jobb
+            </span>
           </div>
         </div>
 
-        {/* Keyboard hint bar */}
-        <div
-          className="h-4 rounded-b-sm"
-          style={{ background: 'linear-gradient(to bottom, #c0c0c0, #a8a8a8)' }}
-        />
+        <div className="flex" style={{ minHeight: 320 }}>
+          {/* Sidebar */}
+          <div
+            className="preview-sidebar flex flex-col py-4 px-2.5 gap-0.5"
+            style={{ width: 148, background: '#111111', flexShrink: 0 }}
+          >
+            <div className="flex items-center gap-2 px-2.5 py-2 mb-3">
+              <div
+                className="flex items-center justify-center rounded-md"
+                style={{ width: 20, height: 20, background: '#0055FF', flexShrink: 0 }}
+              >
+                <Wrench style={{ width: 11, height: 11, color: '#fff' }} strokeWidth={2.5} />
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>
+                Hantverksappen
+              </span>
+            </div>
+            {[
+              { label: 'Översikt',  active: false },
+              { label: 'Jobb',      active: true  },
+              { label: 'Offerter',  active: false },
+              { label: 'Fakturor',  active: false },
+              { label: 'Kunder',    active: false },
+            ].map(({ label, active }) => (
+              <div
+                key={label}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
+                style={{
+                  background: active ? 'rgba(0,85,255,0.16)' : 'transparent',
+                  color:      active ? '#6699FF' : '#777',
+                  fontSize: 12,
+                  fontWeight: 500,
+                }}
+              >
+                <span
+                  className="rounded-full"
+                  style={{ width: 5, height: 5, background: active ? '#0055FF' : '#444', flexShrink: 0 }}
+                />
+                {label}
+              </div>
+            ))}
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 p-5" style={{ background: '#F8F8F8' }}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p style={{ fontSize: 15, fontWeight: 800, color: '#111', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                  Jobb
+                </p>
+                <p style={{ fontSize: 11, color: '#999', marginTop: 3 }}>4 aktiva jobb</p>
+              </div>
+              <button
+                className="flex items-center gap-1 rounded-lg text-white"
+                style={{ background: '#0055FF', fontSize: 11, fontWeight: 600, padding: '6px 12px' }}
+              >
+                + Nytt jobb
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {JOBS.map((job) => (
+                <div
+                  key={job.customer}
+                  className="flex items-center gap-3 rounded-xl px-3"
+                  style={{ background: '#fff', border: '1px solid #E5E5E5', padding: '8px 12px' }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p style={{ fontSize: 12, fontWeight: 600, color: '#111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {job.customer}
+                    </p>
+                    <p style={{ fontSize: 10, color: '#999', marginTop: 1 }}>{job.type}</p>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 10, fontWeight: 700,
+                      padding: '2px 8px', borderRadius: 99,
+                      background: job.sb, color: job.sc,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {job.status}
+                  </span>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: '#111', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                    {job.amount}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Base / hinge */}
+      {/* Floating card: paid invoice */}
       <div
-        className="mx-auto rounded-b-xl"
+        className="absolute hidden md:block"
         style={{
-          height: 8,
-          width: '90%',
-          background: 'linear-gradient(to bottom, #b0b0b0, #989898)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          bottom: -20, left: -24,
+          background: '#fff',
+          boxShadow: '0 0 0 1px rgba(0,0,0,0.05), 0 8px 24px rgba(0,0,0,0.09)',
+          borderRadius: 14,
+          padding: '12px 14px',
+          width: 196,
         }}
-      />
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <div
+            className="flex items-center justify-center rounded-lg"
+            style={{ width: 28, height: 28, background: '#F0FFF4', flexShrink: 0 }}
+          >
+            <Check style={{ width: 13, height: 13, color: '#16A34A' }} strokeWidth={3} />
+          </div>
+          <div>
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#111', lineHeight: 1 }}>Faktura betald</p>
+            <p style={{ fontSize: 10, color: '#999', marginTop: 2 }}>Svenssons Fastighet AB</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <span style={{ fontSize: 10, color: '#BBB' }}>ROT inkluderat</span>
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#111', fontVariantNumeric: 'tabular-nums' }}>34 500 kr</span>
+        </div>
+      </div>
+
+      {/* Floating card: ROT badge */}
+      <div
+        className="absolute hidden md:block"
+        style={{
+          top: -16, right: -16,
+          background: '#0055FF',
+          boxShadow: '0 8px 28px rgba(0,85,255,0.32)',
+          borderRadius: 14,
+          padding: '10px 14px',
+        }}
+      >
+        <p style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.65)', lineHeight: 1, marginBottom: 3 }}>
+          ROT-avdrag
+        </p>
+        <p style={{ fontSize: 18, fontWeight: 800, color: '#fff', fontVariantNumeric: 'tabular-nums', lineHeight: 1, letterSpacing: '-0.02em' }}>
+          -2 100 kr
+        </p>
+        <p style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', marginTop: 3 }}>
+          Beraknat automatiskt
+        </p>
+      </div>
     </div>
   )
 }
 
-function PhoneMockup({ size = 'lg' }) {
-  const isSmall = size === 'sm'
-  const w = isSmall ? 120 : 200
-  const h = isSmall ? 216 : 360
+// ─── Pricing card ─────────────────────────────────────────────────────────────
 
+function PricingCard({ name, price, period, description, features, featured, cta, delay, onSignup }) {
   return (
-    <div
-      className="relative inline-block rounded-3xl overflow-hidden flex-shrink-0"
+    <motion.div
+      {...fadeUp(delay)}
+      className="relative flex flex-col rounded-2xl"
       style={{
-        width: w,
-        height: h,
-        background: 'linear-gradient(145deg, #2a2a2a 0%, #1a1a1a 100%)',
-        border: '2px solid #333',
-        boxShadow: isSmall
-          ? '0 12px 32px rgba(0,0,0,0.25)'
-          : '0 24px 56px rgba(0,0,0,0.30), 0 8px 24px rgba(0,0,0,0.18)',
-        padding: isSmall ? 4 : 6,
+        padding: 28,
+        background: featured ? '#0055FF' : '#fff',
+        border: `1px solid ${featured ? 'transparent' : '#E5E5E5'}`,
+        boxShadow: featured
+          ? '0 24px 64px rgba(0,85,255,0.28), 0 8px 24px rgba(0,85,255,0.16)'
+          : '0 1px 4px rgba(0,0,0,0.04)',
       }}
     >
-      {/* Notch */}
-      <div
-        className="absolute top-0 left-1/2 -translate-x-1/2 rounded-b-xl z-10"
-        style={{
-          width: isSmall ? 36 : 60,
-          height: isSmall ? 10 : 16,
-          background: '#1a1a1a',
-        }}
-      />
-
-      {/* Screen */}
-      <div
-        className="relative w-full h-full rounded-2xl overflow-hidden flex flex-col"
-        style={{ background: '#F8F8F8' }}
-      >
-        {/* Status bar space */}
-        <div style={{ height: isSmall ? 12 : 20 }} />
-
-        {/* Content */}
-        <div className="flex-1 p-2 overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-2">
-            <div
-              className="rounded-full"
-              style={{ height: isSmall ? 6 : 10, width: isSmall ? 28 : 48, background: '#111' }}
-            />
-            <div
-              className="rounded-md"
-              style={{
-                height: isSmall ? 10 : 18,
-                width: isSmall ? 20 : 32,
-                background: '#0055FF',
-              }}
-            />
-          </div>
-
-          {/* Job cards */}
-          {[
-            { dot: '#0055FF', badge: '#EEF4FF' },
-            { dot: '#22C55E', badge: '#F0FFF4' },
-            { dot: '#F59E0B', badge: '#FFF8EE' },
-          ].slice(0, isSmall ? 2 : 3).map((card, i) => (
-            <div
-              key={i}
-              className="rounded-xl mb-1.5 p-2"
-              style={{
-                background: 'white',
-                border: '1px solid #E5E7EB',
-                padding: isSmall ? '4px 6px' : '8px 10px',
-              }}
-            >
-              <div className="flex items-center gap-1.5 mb-1">
-                <div
-                  className="rounded-full flex-shrink-0"
-                  style={{ width: isSmall ? 4 : 6, height: isSmall ? 4 : 6, background: card.dot }}
-                />
-                <div
-                  className="rounded-full flex-1"
-                  style={{ height: isSmall ? 4 : 7, background: '#374151' }}
-                />
-              </div>
-              <div className="flex items-center gap-1">
-                <div
-                  className="rounded-full"
-                  style={{ height: isSmall ? 3 : 5, width: isSmall ? 28 : 48, background: '#D1D5DB' }}
-                />
-                <div
-                  className="rounded-full ml-auto"
-                  style={{
-                    height: isSmall ? 8 : 14,
-                    width: isSmall ? 16 : 28,
-                    background: card.badge,
-                    border: `1px solid ${card.dot}33`,
-                  }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Bottom nav */}
+      {featured && (
         <div
-          className="flex items-center justify-around"
+          className="absolute left-1/2 -translate-x-1/2"
           style={{
-            height: isSmall ? 24 : 40,
-            background: 'white',
-            borderTop: '1px solid #E5E7EB',
+            top: -12,
+            background: '#fff',
+            color: '#0055FF',
+            fontSize: 11,
+            fontWeight: 800,
+            padding: '4px 12px',
+            borderRadius: 99,
+            whiteSpace: 'nowrap',
           }}
         >
-          {[true, false, false, false].map((active, i) => (
-            <div key={i} className="flex flex-col items-center gap-0.5">
-              <div
-                className="rounded-sm"
-                style={{
-                  width: isSmall ? 10 : 16,
-                  height: isSmall ? 10 : 16,
-                  background: active ? '#0055FF' : '#D1D5DB',
-                  borderRadius: isSmall ? 2 : 3,
-                }}
-              />
-              {!isSmall && (
-                <div className="rounded-full" style={{ width: 20, height: 3, background: active ? '#0055FF55' : '#E5E7EB' }} />
-              )}
-            </div>
-          ))}
+          Popularast
         </div>
+      )}
+
+      <p
+        style={{
+          fontSize: 13,
+          fontWeight: 600,
+          color: featured ? 'rgba(255,255,255,0.65)' : '#888',
+          marginBottom: 6,
+        }}
+      >
+        {name}
+      </p>
+
+      <div className="flex items-baseline gap-1 mb-2">
+        <span
+          style={{
+            fontSize: 36,
+            fontWeight: 800,
+            letterSpacing: '-0.03em',
+            lineHeight: 1,
+            color: featured ? '#fff' : '#111',
+          }}
+        >
+          {price}
+        </span>
+        {period && (
+          <span style={{ fontSize: 14, color: featured ? 'rgba(255,255,255,0.55)' : '#AAA' }}>
+            {period}
+          </span>
+        )}
       </div>
-    </div>
+
+      <p
+        style={{
+          fontSize: 13,
+          lineHeight: 1.6,
+          color: featured ? 'rgba(255,255,255,0.65)' : '#777',
+          marginBottom: 24,
+        }}
+      >
+        {description}
+      </p>
+
+      <ul style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 28, flex: 1 }}>
+        {features.map(f => (
+          <li key={f} className="flex items-start gap-2.5">
+            <Check
+              style={{ width: 15, height: 15, flexShrink: 0, marginTop: 1, color: featured ? 'rgba(255,255,255,0.8)' : '#0055FF' }}
+              strokeWidth={2.5}
+            />
+            <span style={{ fontSize: 13, color: featured ? 'rgba(255,255,255,0.85)' : '#555' }}>
+              {f}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <button
+        onClick={onSignup}
+        className={featured ? 'btn-plan-featured' : 'btn-plan'}
+      >
+        {cta}
+      </button>
+    </motion.div>
   )
 }
 
-function QuoteSnippet({ size = 'sm' }) {
-  const w = 120, h = 216
-  return (
-    <div
-      className="relative inline-block rounded-3xl overflow-hidden flex-shrink-0"
-      style={{
-        width: w, height: h,
-        background: 'linear-gradient(145deg, #2a2a2a, #1a1a1a)',
-        border: '2px solid #333',
-        boxShadow: '0 12px 32px rgba(0,0,0,0.25)',
-        padding: 4,
-      }}
-    >
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 rounded-b-xl z-10"
-        style={{ width: 36, height: 10, background: '#1a1a1a' }} />
-      <div className="w-full h-full rounded-2xl overflow-hidden flex flex-col"
-        style={{ background: '#F8F8F8' }}>
-        <div style={{ height: 12 }} />
-        <div className="flex-1 p-2 overflow-hidden">
-          <div className="h-1.5 w-16 rounded-full bg-gray-800 mb-2 opacity-80" />
-          {[
-            { label: 60, amount: 28 },
-            { label: 44, amount: 24 },
-            { label: 52, amount: 20 },
-          ].map((row, i) => (
-            <div key={i} className="flex items-center justify-between mb-1.5 px-1.5 py-1 rounded-lg bg-white"
-              style={{ border: '1px solid #E5E7EB' }}>
-              <div className="h-1.5 rounded-full bg-gray-400" style={{ width: row.label }} />
-              <div className="h-1.5 rounded-full bg-gray-700" style={{ width: row.amount }} />
-            </div>
-          ))}
-          {/* ROT badge */}
-          <div className="mt-2 rounded-lg p-1.5" style={{ background: '#F0FFF4', border: '1px solid #BBF7D0' }}>
-            <div className="h-1.5 w-20 rounded-full" style={{ background: '#22C55E', opacity: 0.7 }} />
-            <div className="h-1.5 w-14 rounded-full mt-1" style={{ background: '#22C55E', opacity: 0.4 }} />
-          </div>
-          {/* Total */}
-          <div className="mt-2 rounded-lg p-1.5" style={{ background: '#111' }}>
-            <div className="flex justify-between">
-              <div className="h-2 w-12 rounded-full bg-gray-500" />
-              <div className="h-2 w-16 rounded-full bg-white opacity-80" />
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center justify-around" style={{ height: 24, background: 'white', borderTop: '1px solid #E5E7EB' }}>
-          {[true, false, false, false].map((active, i) => (
-            <div key={i} className="rounded-sm w-2.5 h-2.5"
-              style={{ background: active ? '#0055FF' : '#D1D5DB', borderRadius: 2 }} />
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function InvoiceSnippet() {
-  return (
-    <div
-      className="relative inline-block rounded-3xl overflow-hidden flex-shrink-0"
-      style={{
-        width: 120, height: 216,
-        background: 'linear-gradient(145deg, #2a2a2a, #1a1a1a)',
-        border: '2px solid #333',
-        boxShadow: '0 12px 32px rgba(0,0,0,0.25)',
-        padding: 4,
-      }}
-    >
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 rounded-b-xl z-10"
-        style={{ width: 36, height: 10, background: '#1a1a1a' }} />
-      <div className="w-full h-full rounded-2xl overflow-hidden flex flex-col"
-        style={{ background: '#F8F8F8' }}>
-        <div style={{ height: 12 }} />
-        <div className="flex-1 p-2 overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
-            <div className="h-1.5 w-14 rounded-full bg-gray-800 opacity-80" />
-            <div className="h-4 w-10 rounded-full" style={{ background: '#EEF4FF', border: '1px solid #BFDBFE' }}>
-              <div className="h-1.5 w-6 mx-auto mt-1 rounded-full" style={{ background: '#0055FF', opacity: 0.6 }} />
-            </div>
-          </div>
-          {[40, 52, 36].map((w, i) => (
-            <div key={i} className="flex items-center justify-between mb-1 px-1.5 py-1 rounded-lg bg-white"
-              style={{ border: '1px solid #E5E7EB' }}>
-              <div className="h-1.5 rounded-full bg-gray-400" style={{ width: w }} />
-              <div className="h-1.5 rounded-full bg-gray-600" style={{ width: 22 }} />
-            </div>
-          ))}
-          <div className="mt-2 rounded-lg p-1.5" style={{ background: '#F0FFF4', border: '1px solid #BBF7D0' }}>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#22C55E' }} />
-              <div className="h-1.5 w-16 rounded-full" style={{ background: '#22C55E', opacity: 0.6 }} />
-            </div>
-          </div>
-          <div className="mt-1.5 rounded-lg p-1.5" style={{ background: '#111' }}>
-            <div className="flex justify-between">
-              <div className="h-2 w-10 rounded-full bg-gray-500" />
-              <div className="h-2 w-14 rounded-full bg-white opacity-80" />
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center justify-around" style={{ height: 24, background: 'white', borderTop: '1px solid #E5E7EB' }}>
-          {[false, false, true, false].map((active, i) => (
-            <div key={i} className="w-2.5 h-2.5 rounded-sm"
-              style={{ background: active ? '#0055FF' : '#D1D5DB', borderRadius: 2 }} />
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Main ──────────────────────────────────────────────────────────────────────
+// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function Home() {
   const navigate = useNavigate()
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const reduce = useReducedMotion()
 
   useEffect(() => {
-    const fn = () => setScrolled(window.scrollY > 16)
+    const fn = () => setScrolled(window.scrollY > 20)
     window.addEventListener('scroll', fn, { passive: true })
     return () => window.removeEventListener('scroll', fn)
   }, [])
 
+  const TRADE_LABELS = [
+    'Rörmokare', 'Elektriker', 'Målare', 'Snickare', 'Städare',
+    'VVS-tekniker', 'Plattsättare', 'Golvläggare', 'Fasadmålare', 'Murare',
+  ]
+
+  const PLANS = [
+    {
+      name: 'Start',
+      price: '0 kr',
+      period: '',
+      description: '60 dagars provperiod med alla funktioner. Inget kreditkort krävs.',
+      features: ['Offerter med ROT och RUT', 'Jobbhantering', 'Fakturor och PDF-export', 'E-postsupport'],
+      featured: false,
+      cta: 'Kom igång gratis',
+    },
+    {
+      name: 'Proffs',
+      price: '249 kr',
+      period: '/mån',
+      description: 'För aktiva hantverkare som vill spara tid varje dag.',
+      features: ['Allt i Start', 'Obegränsade kunder', 'Fortnox-export', 'Anpassad logotyp på PDF', 'Prioriterad support'],
+      featured: true,
+      cta: 'Starta provperiod',
+    },
+    {
+      name: 'Företag',
+      price: '549 kr',
+      period: '/mån',
+      description: 'För team med upp till 10 anställda och hög faktureringsvolym.',
+      features: ['Allt i Proffs', 'Upp till 10 användare', 'Flera projektledare', 'API-åtkomst', 'Dedikerad support'],
+      featured: false,
+      cta: 'Starta provperiod',
+    },
+  ]
+
   return (
-    <div className="min-h-screen bg-white text-slate-900 antialiased">
+    <MotionConfig reducedMotion="user">
+    <div
+      className="min-h-screen antialiased"
+      style={{ background: '#060A14', color: '#111', fontFamily: '"Geist Variable", Geist, system-ui, sans-serif' }}
+    >
+      <style>{HOME_CSS}</style>
 
-      {/* ── Navbar ─────────────────────────────────────────────────────────── */}
+      {/* ─── Navbar ─────────────────────────────────────────────────────────── */}
       <header
-        className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
-          scrolled
-            ? 'bg-white/90 backdrop-blur-xl border-b border-slate-100'
-            : 'bg-transparent'
-        }`}
+        className="fixed inset-x-0 top-0 z-50"
+        style={{
+          transition: 'background 300ms, border-color 300ms, backdrop-filter 300ms',
+          background: scrolled ? 'rgba(255,255,255,0.88)' : 'transparent',
+          backdropFilter: scrolled ? 'blur(20px) saturate(160%)' : 'none',
+          WebkitBackdropFilter: scrolled ? 'blur(20px) saturate(160%)' : 'none',
+          borderBottom: `1px solid ${scrolled ? '#E5E5E5' : 'transparent'}`,
+        }}
       >
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-
+        <div
+          className="flex items-center justify-between px-6"
+          style={{ maxWidth: 1280, margin: '0 auto', height: 64 }}
+        >
           {/* Logo */}
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             className="flex items-center gap-2.5 outline-none"
           >
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-              <Wrench className="w-4 h-4 text-white" strokeWidth={2.5} />
+            <div
+              className="flex items-center justify-center rounded-xl"
+              style={{ width: 32, height: 32, background: '#0055FF', flexShrink: 0 }}
+            >
+              <Wrench style={{ width: 15, height: 15, color: '#fff' }} strokeWidth={2.5} />
             </div>
-            <span className="font-semibold text-[15px] text-slate-900 tracking-tight">
+            <span style={{ fontSize: 15, fontWeight: 800, color: '#111', letterSpacing: '-0.02em' }}>
               Hantverksappen
             </span>
           </button>
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-8">
-            <a href="#features"
-              className="text-[14px] text-slate-500 hover:text-slate-900 transition-colors font-medium">
-              Funktioner
-            </a>
-            <a href="#rotrut"
-              className="text-[14px] text-slate-500 hover:text-slate-900 transition-colors font-medium">
-              ROT & RUT
-            </a>
-            <a href="#pricing"
-              className="text-[14px] text-slate-500 hover:text-slate-900 transition-colors font-medium">
-              Priser
-            </a>
+            {[
+              { label: 'Funktioner', href: '#features' },
+              { label: 'ROT & RUT',  href: '#rotrut'   },
+              { label: 'Hur det fungerar', href: '#how' },
+              { label: 'Priser',     href: '#pricing'  },
+            ].map(({ label, href }) => (
+              <a key={href} href={href} className="nav-link">{label}</a>
+            ))}
           </nav>
 
-          {/* Desktop CTA */}
-          <div className="hidden md:flex items-center gap-3">
+          {/* Desktop CTAs */}
+          <div className="hidden md:flex items-center gap-2">
             <button
               onClick={() => navigate('/login')}
-              className="text-[14px] font-medium text-slate-600 hover:text-slate-900 transition-colors px-4 py-2 rounded-lg hover:bg-slate-50"
+              style={{
+                fontSize: 14, fontWeight: 500, color: '#555',
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                padding: '8px 14px', borderRadius: 8, transition: 'color 150ms',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#111' }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#555' }}
             >
               Logga in
             </button>
             <button
               onClick={() => navigate('/signup')}
-              className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-primary-dark active:bg-primary-darker text-white text-[14px] font-semibold px-5 py-2.5 rounded-xl transition-all "
+              className="btn-primary"
+              style={{ fontSize: 14, padding: '9px 18px', borderRadius: 10 }}
             >
               Kom igång gratis
-              <ArrowRight className="w-3.5 h-3.5" />
+              <ArrowRight style={{ width: 14, height: 14 }} />
             </button>
           </div>
 
-          {/* Mobile menu toggle */}
+          {/* Mobile toggle */}
           <button
             onClick={() => setMenuOpen(v => !v)}
-            className="md:hidden p-2 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors"
+            className="md:hidden p-2 rounded-lg"
+            style={{ color: '#555', background: 'none', border: 'none', cursor: 'pointer' }}
             aria-label={menuOpen ? 'Stäng meny' : 'Öppna meny'}
           >
-            {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {menuOpen ? <X style={{ width: 20, height: 20 }} /> : <Menu style={{ width: 20, height: 20 }} />}
           </button>
         </div>
 
         {/* Mobile drawer */}
         {menuOpen && (
-          <div className="md:hidden bg-white border-t border-slate-100 divide-y divide-slate-50">
+          <div style={{ background: '#fff', borderTop: '1px solid #E5E5E5' }}>
             {[
               { label: 'Funktioner', href: '#features' },
-              { label: 'ROT & RUT', href: '#rotrut' },
-              { label: 'Priser', href: '#pricing' },
+              { label: 'ROT & RUT',  href: '#rotrut'   },
+              { label: 'Hur det fungerar', href: '#how' },
+              { label: 'Priser',     href: '#pricing'  },
             ].map(({ label, href }) => (
               <a
                 key={href}
                 href={href}
                 onClick={() => setMenuOpen(false)}
-                className="block px-6 py-4 text-[15px] font-medium text-slate-700"
+                style={{
+                  display: 'block', padding: '14px 24px',
+                  fontSize: 15, fontWeight: 500, color: '#333',
+                  borderBottom: '1px solid #F5F5F5', textDecoration: 'none',
+                }}
               >
                 {label}
               </a>
             ))}
-            <div className="p-4 space-y-3">
+            <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <button
                 onClick={() => navigate('/login')}
-                className="w-full text-[14px] font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 py-3 rounded-xl transition-colors"
+                style={{
+                  width: '100%', padding: '12px', borderRadius: 10,
+                  fontSize: 14, fontWeight: 600, color: '#111',
+                  background: '#F5F5F5', border: 'none', cursor: 'pointer',
+                }}
               >
                 Logga in
               </button>
               <button
                 onClick={() => navigate('/signup')}
-                className="w-full text-[14px] font-semibold text-white bg-blue-600 hover:bg-primary-dark py-3 rounded-xl transition-colors"
+                className="btn-primary"
+                style={{ width: '100%', justifyContent: 'center', borderRadius: 10 }}
               >
                 Kom igång gratis
               </button>
-              <p className="text-center text-[12px] font-medium" style={{ color: '#666666' }}>
-                ✓ 60 dagar gratis — inget kreditkort krävs
-              </p>
             </div>
           </div>
         )}
       </header>
 
 
-      {/* ── Hero ───────────────────────────────────────────────────────────── */}
-      <section className="relative pt-40 pb-28 sm:pt-48 sm:pb-36 overflow-hidden">
-
-        {/* Subtle dot grid background */}
+      {/* ─── Hero ───────────────────────────────────────────────────────────── */}
+      <section
+        className="relative overflow-hidden"
+        style={{ minHeight: '100dvh', background: '#fff' }}
+      >
+        {/* Subtle grid */}
         <div
+          aria-hidden="true"
           className="absolute inset-0 pointer-events-none"
           style={{
-            backgroundImage: 'radial-gradient(circle, #E5E5E5 1px, transparent 1px)',
-            backgroundSize: '28px 28px',
-            opacity: 0.55,
+            backgroundImage:
+              'linear-gradient(rgba(0,0,0,0.045) 1px, transparent 1px),' +
+              'linear-gradient(90deg, rgba(0,0,0,0.045) 1px, transparent 1px)',
+            backgroundSize: '72px 72px',
+            maskImage: 'radial-gradient(ellipse 90% 60% at 50% 0%, black 0%, transparent 100%)',
+            WebkitMaskImage: 'radial-gradient(ellipse 90% 60% at 50% 0%, black 0%, transparent 100%)',
           }}
         />
-        <div className="relative max-w-4xl mx-auto px-6 text-center">
 
-          {/* Eyebrow */}
-          <motion.div {...up(0)} className="flex justify-center mb-8">
-            <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-blue-700 bg-blue-50 border border-blue-100 px-4 py-1.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-              Byggt för svenska hantverkare
-            </span>
-          </motion.div>
+        <div
+          className="relative flex flex-col lg:flex-row items-center lg:items-start gap-12 lg:gap-16 px-6"
+          style={{ maxWidth: 1280, margin: '0 auto', paddingTop: 'clamp(80px, 8vw, 96px)', paddingBottom: 'clamp(64px, 6vw, 96px)' }}
+        >
+          {/* Left: copy */}
+          <div style={{ flex: '1 1 0', minWidth: 0, maxWidth: 600 }}>
+            <motion.div
+              initial={reduce ? false : { opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, ease: EASE }}
+            >
+              <span
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  fontSize: 12, fontWeight: 700, color: '#0055FF',
+                  background: '#EEF4FF', border: '1px solid #B8CFFF',
+                  padding: '5px 12px', borderRadius: 99, marginBottom: 28,
+                }}
+              >
+                Byggt för svenska hantverkare
+              </span>
+            </motion.div>
 
-          {/* Headline */}
-          <motion.h1 {...up(0.07)}
-            className="text-5xl sm:text-6xl lg:text-[72px] font-bold text-slate-900 leading-[1.06] tracking-[-0.03em] mb-7"
-          >
-            Mer tid på jobbet.
-            <br />
-            <span className="text-blue-600">Mindre tid på pappren.</span>
-          </motion.h1>
+            <motion.h1
+              initial={reduce ? false : { opacity: 0, y: 28 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.65, delay: 0.05, ease: EASE }}
+              style={{
+                fontSize: 'clamp(38px, 4.2vw, 60px)',
+                fontWeight: 800,
+                letterSpacing: '-0.04em',
+                lineHeight: 1.0,
+                color: '#111',
+                marginBottom: 24,
+                textWrap: 'balance',
+              }}
+            >
+              Mer tid på jobbet.{' '}
+              <span style={{ color: '#0055FF' }}>Mindre tid på pappren.</span>
+            </motion.h1>
 
-          {/* Sub */}
-          <motion.p {...up(0.13)}
-            className="text-xl sm:text-[21px] text-slate-500 leading-relaxed max-w-2xl mx-auto mb-10 font-normal"
-          >
-            Offerter med ROT&nbsp;/&nbsp;RUT, jobbstatus och fakturor — allt på ett ställe.
-            Designat för hantverkaren som vill fokusera på hantverket.
-          </motion.p>
+            <motion.p
+              initial={reduce ? false : { opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.13, ease: EASE }}
+              style={{
+                fontSize: 18, lineHeight: 1.65, color: '#666',
+                maxWidth: '42ch', marginBottom: 36,
+              }}
+            >
+              Offerter med ROT och RUT, jobbstatus och fakturor i ett system.
+              Designat för rörmokare, elektriker och alla som lever av sitt hantverk.
+            </motion.p>
 
-          {/* CTA row */}
-          <motion.div {...up(0.18)} className="flex flex-col items-center mb-12">
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full">
+            <motion.div
+              initial={reduce ? false : { opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2, ease: EASE }}
+              style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}
+            >
               <button
                 onClick={() => navigate('/signup')}
-                className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-primary-dark active:bg-primary-darker text-white font-semibold text-[16px] px-8 py-4 rounded-xl transition-all hover:-translate-y-px"
+                className="btn-primary"
               >
                 Kom igång gratis
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                <ArrowRight style={{ width: 16, height: 16 }} />
               </button>
-              <a
-                href="#features"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white text-slate-700 font-semibold text-[16px] px-8 py-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all"
-              >
+              <a href="#how" className="btn-secondary">
                 Se hur det fungerar
               </a>
-            </div>
-            <p className="mt-3 text-[13px] font-medium" style={{ color: '#666666' }}>
-              ✓ 60 dagar gratis — inget kreditkort krävs
-            </p>
-          </motion.div>
+            </motion.div>
+          </div>
 
-          {/* Trust strip */}
-          <motion.div {...fade(0.28)}
-            className="inline-flex items-center gap-6 text-[13px] text-slate-400 font-medium"
+          {/* Right: product UI preview */}
+          <motion.div
+            initial={reduce ? false : { opacity: 0, x: 48 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8, delay: 0.18, ease: EASE }}
+            style={{
+              flex: '1 1 0',
+              minWidth: 0,
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'flex-start',
+              paddingTop: 'clamp(0px, 3vw, 48px)',
+            }}
           >
-            <span className="flex items-center gap-1.5">
-              <Check className="w-3.5 h-3.5 text-blue-600" strokeWidth={3} />
-              60 dagar gratis
-            </span>
-            <span className="w-px h-3.5 bg-slate-200" />
-            <span className="flex items-center gap-1.5">
-              <Check className="w-3.5 h-3.5 text-blue-600" strokeWidth={3} />
-              Inget kreditkort
-            </span>
-            <span className="w-px h-3.5 bg-slate-200" />
-            <span className="flex items-center gap-1.5">
-              <Check className="w-3.5 h-3.5 text-blue-600" strokeWidth={3} />
-              GDPR-säkert
-            </span>
+            <ProductPreview />
           </motion.div>
         </div>
-
-        {/* Dashboard preview card */}
-        <motion.div {...up(0.24)} className="relative max-w-3xl mx-auto mt-20 px-6">
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-
-            {/* Window bar */}
-            <div className="bg-slate-50 border-b border-slate-100 px-5 py-3.5 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-              <span className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-              <span className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-              <div className="flex-1 mx-4">
-                <div className="w-44 h-4 bg-slate-100 rounded-md mx-auto" />
-              </div>
-            </div>
-
-            <div className="p-6 sm:p-8">
-              {/* Header row */}
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <div className="w-28 h-5 bg-slate-900 rounded-md opacity-90" />
-                  <div className="w-36 h-3.5 bg-slate-200 rounded-md mt-2" />
-                </div>
-                <div className="w-28 h-9 bg-blue-600 rounded-lg opacity-90" />
-              </div>
-
-              {/* Stat row */}
-              <div className="grid grid-cols-4 gap-3 mb-6">
-                {[
-                  { bg: 'bg-blue-50', bar1: 'bg-blue-600', bar2: 'bg-blue-200', w1: 'w-8', w2: 'w-14' },
-                  { bg: 'bg-amber-50', bar1: 'bg-amber-500', bar2: 'bg-amber-200', w1: 'w-6', w2: 'w-10' },
-                  { bg: 'bg-slate-50', bar1: 'bg-slate-400', bar2: 'bg-slate-200', w1: 'w-10', w2: 'w-16' },
-                  { bg: 'bg-green-50', bar1: 'bg-green-500', bar2: 'bg-green-200', w1: 'w-12', w2: 'w-20' },
-                ].map((c, i) => (
-                  <div key={i} className={`${c.bg} rounded-xl p-3.5 border border-white`}>
-                    <div className={`${c.bar1} w-3 h-3 rounded-sm mb-3 opacity-80`} />
-                    <div className={`${c.bar1} ${c.w1} h-5 rounded-md mb-1.5 opacity-80`} />
-                    <div className={`${c.bar2} ${c.w2} h-2.5 rounded-full`} />
-                  </div>
-                ))}
-              </div>
-
-              {/* Table rows */}
-              <div className="space-y-2.5">
-                {[
-                  { dot: 'bg-blue-500', w: 'w-36', sub: 'w-24', badge: 'bg-blue-50 w-14', amount: 'w-16' },
-                  { dot: 'bg-green-500', w: 'w-48', sub: 'w-28', badge: 'bg-green-50 w-12', amount: 'w-20' },
-                  { dot: 'bg-amber-500', w: 'w-32', sub: 'w-20', badge: 'bg-amber-50 w-16', amount: 'w-14' },
-                ].map((row, i) => (
-                  <div key={i}
-                    className="flex items-center gap-4 bg-slate-50/70 rounded-xl px-4 py-3.5 border border-slate-100"
-                  >
-                    <span className={`w-2 h-2 rounded-full ${row.dot} flex-shrink-0`} />
-                    <div className="flex-1 flex items-center gap-4">
-                      <div>
-                        <div className={`${row.w} h-3 bg-slate-700 rounded-full`} />
-                        <div className={`${row.sub} h-2.5 bg-slate-200 rounded-full mt-1.5`} />
-                      </div>
-                    </div>
-                    <div className={`${row.badge} h-5 rounded-full`} />
-                    <div className={`${row.amount} h-3.5 bg-slate-300 rounded-full`} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Floating badge */}
-          <div className="absolute -bottom-4 -right-2 sm:right-4 bg-white border border-slate-100 rounded-xl px-5 py-3 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
-              <Check className="w-4 h-4 text-success" strokeWidth={2.5} />
-            </div>
-            <div>
-              <p className="text-[13px] font-semibold text-slate-800 leading-tight">Faktura skickad</p>
-              <p className="text-[12px] text-slate-400 mt-0.5">Lindqvist VVS · 23&nbsp;450&nbsp;kr</p>
-            </div>
-          </div>
-        </motion.div>
       </section>
 
 
-      {/* ── Device showcase ────────────────────────────────────────────────── */}
-      <section className="py-24 sm:py-36 overflow-hidden" style={{ background: '#F5F5F5' }}>
-        <div className="max-w-6xl mx-auto px-6">
-
-          {/* Heading */}
-          <motion.div {...up(0)} className="text-center mb-16">
-            <Eyebrow>Se appen i action</Eyebrow>
-            <h2 className="mt-5 text-4xl sm:text-5xl font-bold text-slate-900 tracking-tight leading-[1.1]">
-              Allt du behöver,
-              <br />alltid tillgängligt
-            </h2>
-            <p className="mt-5 text-[17px] text-slate-500 leading-relaxed">
-              Fungerar på dator, surfplatta och mobil
-            </p>
-          </motion.div>
-
-          {/* Mockup composition */}
-          <motion.div {...up(0.1)}>
-            {/* Desktop: laptop + phone overlapping */}
-            <div className="hidden md:flex items-end justify-center gap-0 relative">
-              <div className="relative z-10">
-                <LaptopMockup />
-              </div>
+      {/* ─── Social proof bar ───────────────────────────────────────────────── */}
+      <section
+        style={{
+          background: '#F5F5F5',
+          borderTop: '1px solid #E5E5E5',
+          borderBottom: '1px solid #E5E5E5',
+          padding: '20px 0',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          className="flex items-center gap-4 px-6 mb-3"
+          style={{ maxWidth: 1280, margin: '0 auto' }}
+        >
+          <p style={{ fontSize: 12, fontWeight: 600, color: '#AAA', whiteSpace: 'nowrap' }}>
+            Används av hantverkare i hela Sverige
+          </p>
+          <div style={{ flex: 1, height: 1, background: '#E5E5E5' }} />
+        </div>
+        <div style={{ overflow: 'hidden' }}>
+          <div className="marquee-track">
+            {[...TRADE_LABELS, ...TRADE_LABELS].map((label, i) => (
               <div
-                className="relative z-20 -ml-8 mb-6"
-                style={{ transform: 'rotate(-6deg)', transformOrigin: 'bottom center' }}
+                key={i}
+                className="flex items-center gap-2"
+                style={{
+                  flexShrink: 0,
+                  background: '#fff',
+                  border: '1px solid #E5E5E5',
+                  borderRadius: 99,
+                  padding: '7px 14px',
+                  margin: '0 6px',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: '#555',
+                  whiteSpace: 'nowrap',
+                }}
               >
-                <PhoneMockup size="lg" />
+                <span
+                  style={{ width: 6, height: 6, background: '#0055FF', borderRadius: '50%', flexShrink: 0 }}
+                />
+                {label}
               </div>
-            </div>
-
-            {/* Mobile: phone only */}
-            <div className="flex md:hidden justify-center">
-              <PhoneMockup size="lg" />
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-
-      {/* ── Feature highlights ─────────────────────────────────────────────── */}
-      <section className="py-28 sm:py-36 bg-white">
-        <div className="max-w-5xl mx-auto px-6">
-
-          <motion.div {...up(0)} className="text-center mb-20">
-            <Eyebrow>Hur det fungerar</Eyebrow>
-            <h2 className="mt-5 text-4xl sm:text-5xl font-bold text-slate-900 tracking-tight leading-[1.1]">
-              Tre steg till en bättre arbetsdag
-            </h2>
-          </motion.div>
-
-          <div className="space-y-24">
-
-            {/* 1 — Offert */}
-            <motion.div {...up(0)} className="grid md:grid-cols-2 gap-12 items-center">
-              <div className="flex justify-center md:justify-start">
-                <div style={{ transform: 'rotate(3deg)' }}>
-                  <QuoteSnippet />
-                </div>
-              </div>
-              <div>
-                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white text-[13px] font-bold mb-5">1</span>
-                <h3 className="text-3xl font-bold text-slate-900 tracking-tight leading-snug mb-4">
-                  Skapa offert på minuter
-                </h3>
-                <p className="text-[16px] text-slate-500 leading-relaxed mb-5">
-                  Välj arbetsmoment, lägg till material och markera vad som gäller
-                  ROT eller RUT. Appen räknar ut avdraget automatiskt och sätter
-                  rätt belopp på kundens offert.
-                </p>
-                <ul className="space-y-2.5">
-                  {['ROT och RUT beräknas automatiskt', 'Kunden godkänner med ett klick', 'Skickas direkt via e-post'].map(item => (
-                    <li key={item} className="flex items-center gap-2.5 text-[14px] text-slate-600 font-medium">
-                      <Check className="w-4 h-4 text-blue-600 flex-shrink-0" strokeWidth={2.5} />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </motion.div>
-
-            <div className="border-t border-slate-100" />
-
-            {/* 2 — Faktura */}
-            <motion.div {...up(0)} className="grid md:grid-cols-2 gap-12 items-center">
-              <div className="md:order-2 flex justify-center md:justify-end">
-                <div style={{ transform: 'rotate(-3deg)' }}>
-                  <InvoiceSnippet />
-                </div>
-              </div>
-              <div className="md:order-1">
-                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white text-[13px] font-bold mb-5">2</span>
-                <h3 className="text-3xl font-bold text-slate-900 tracking-tight leading-snug mb-4">
-                  Fakturera direkt från jobbet
-                </h3>
-                <p className="text-[16px] text-slate-500 leading-relaxed mb-5">
-                  När jobbet är klart skapar du fakturan med ett tryck. PDF-export,
-                  bankgiro och Swish är klart ur lådan — utan extra inställningar.
-                </p>
-                <ul className="space-y-2.5">
-                  {['PDF-export på sekunder', 'Bankgiro och Swish inbyggt', 'Faktura direkt från godkänd offert'].map(item => (
-                    <li key={item} className="flex items-center gap-2.5 text-[14px] text-slate-600 font-medium">
-                      <Check className="w-4 h-4 text-blue-600 flex-shrink-0" strokeWidth={2.5} />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </motion.div>
-
-            <div className="border-t border-slate-100" />
-
-            {/* 3 — Jobb */}
-            <motion.div {...up(0)} className="grid md:grid-cols-2 gap-12 items-center">
-              <div className="flex justify-center md:justify-start">
-                <div style={{ transform: 'rotate(3deg)' }}>
-                  <PhoneMockup size="sm" />
-                </div>
-              </div>
-              <div>
-                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 text-white text-[13px] font-bold mb-5">3</span>
-                <h3 className="text-3xl font-bold text-slate-900 tracking-tight leading-snug mb-4">
-                  Håll koll på alla jobb
-                </h3>
-                <p className="text-[16px] text-slate-500 leading-relaxed mb-5">
-                  Se status på alla pågående och planerade jobb i en vy.
-                  Aldrig mer glömda jobb eller missad deadline.
-                </p>
-                <ul className="space-y-2.5">
-                  {['Alla jobb samlade på ett ställe', 'Status uppdateras i realtid', 'Fungerar lika bra på mobilen'].map(item => (
-                    <li key={item} className="flex items-center gap-2.5 text-[14px] text-slate-600 font-medium">
-                      <Check className="w-4 h-4 text-blue-600 flex-shrink-0" strokeWidth={2.5} />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </motion.div>
-
+            ))}
           </div>
         </div>
       </section>
 
 
-      {/* ── Features ───────────────────────────────────────────────────────── */}
-      <section id="features" className="py-28 sm:py-36 bg-slate-50/60">
-        <div className="max-w-6xl mx-auto px-6">
+      {/* ─── Features bento ─────────────────────────────────────────────────── */}
+      <section id="features" style={{ background: '#fff', padding: 'clamp(64px, 8vw, 120px) 0' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px' }}>
 
-          <motion.div {...up(0)} className="max-w-xl mb-16">
-            <Eyebrow>Funktioner</Eyebrow>
-            <h2 className="mt-5 text-4xl sm:text-5xl font-bold text-slate-900 tracking-tight leading-[1.1]">
-              Allt på ett ställe
+          <motion.div {...fadeUp(0)} style={{ marginBottom: 56 }}>
+            <h2
+              style={{
+                fontSize: 'clamp(32px, 4vw, 52px)',
+                fontWeight: 800,
+                letterSpacing: '-0.03em',
+                lineHeight: 1.05,
+                color: '#111',
+                marginBottom: 16,
+                textWrap: 'balance',
+              }}
+            >
+              Allt du behöver.{' '}
+              <span style={{ color: '#0055FF' }}>Inget du inte behöver.</span>
             </h2>
-            <p className="mt-5 text-[17px] text-slate-500 leading-relaxed">
-              Sluta jonglera med papper, Excel och separata system.
-              Hantverksappen håller ihop hela din affär.
+            <p style={{ fontSize: 17, lineHeight: 1.65, color: '#666', maxWidth: '44ch' }}>
+              Tre kärnfunktioner som tar dig från offert till betald faktura utan onödig administration.
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-5">
-            <FeatureCard
-              delay={0}
-              icon={FileText}
-              iconBg="bg-blue-50 text-blue-600"
-              title="Professionella offerter"
-              description="Skapa och skicka offerter på minuter. Med ROT och RUT inbyggt. Kunden godkänner med ett klick."
-            />
-            <FeatureCard
-              delay={0.08}
-              icon={Briefcase}
-              iconBg="bg-blue-50 text-blue-600"
-              title="Håll koll på jobben"
-              description="Från planerat till avslutat — se statusen på alla dina jobb i realtid. Aldrig mer missad deadline."
-            />
-            <FeatureCard
-              delay={0.16}
-              icon={Receipt}
-              iconBg="bg-blue-50 text-blue-600"
-              title="Fakturera direkt"
-              description="Skapa en faktura direkt när jobbet är klart. PDF-export, bankgiro och Swish klart ur lådan."
-            />
-          </div>
-        </div>
-      </section>
-
-
-      {/* ── Social proof ───────────────────────────────────────────────────── */}
-      <section className="py-28 sm:py-36 bg-slate-900">
-        <div className="max-w-4xl mx-auto px-6">
-
-          {/* Quote */}
-          <motion.div {...up(0)} className="text-center mb-20">
-            <blockquote className="text-2xl sm:text-3xl lg:text-[36px] font-semibold text-white leading-snug tracking-tight max-w-3xl mx-auto">
-              "Vi sparar minst fem timmar i veckan på administration.
-              ROT-avdraget räknas ut automatiskt — det är guld värt."
-            </blockquote>
-
-            <div className="mt-8 flex items-center justify-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
-                <span className="text-[14px] font-bold text-white">AL</span>
+          {/* Bento grid: 5-col on desktop */}
+          <div
+            className="grid grid-cols-1 lg:grid-cols-5 gap-4"
+          >
+            {/* Large card: Offerter */}
+            <motion.div
+              {...fadeUp(0.05)}
+              className="lg:col-span-3 relative overflow-hidden rounded-2xl"
+              style={{ background: '#F5F5F5', minHeight: 360, padding: 32 }}
+            >
+              <div
+                className="inline-flex items-center justify-center rounded-xl"
+                style={{ width: 44, height: 44, background: '#EEF4FF', marginBottom: 20 }}
+              >
+                <FileText style={{ width: 20, height: 20, color: '#0055FF' }} strokeWidth={1.5} />
               </div>
-              <div className="text-left">
-                <p className="text-[15px] font-semibold text-white leading-tight">Anders Lindqvist</p>
-                <p className="text-[13px] text-slate-400 mt-0.5">Elektriker, Stockholm</p>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Divider */}
-          <div className="border-t border-slate-800 mb-16" />
-
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-8">
-            <Stat value="500+"   label="Aktiva hantverkare"   delay={0} />
-            <Stat value="50 000+" label="Fakturor skickade"   delay={0.08} />
-            <Stat value="4.9 / 5" label="Genomsnittligt betyg" delay={0.16} />
-          </div>
-        </div>
-      </section>
-
-
-      {/* ── ROT / RUT ──────────────────────────────────────────────────────── */}
-      <section id="rotrut" className="py-28 sm:py-36 bg-white">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-16 lg:gap-20 items-center">
-
-            {/* Left: copy */}
-            <motion.div {...up(0)}>
-              <Eyebrow>ROT &amp; RUT</Eyebrow>
-              <h2 className="mt-5 text-4xl sm:text-5xl font-bold text-slate-900 tracking-tight leading-[1.1]">
-                Skatteavdraget
-                <br />räknar vi ut åt dig.
-              </h2>
-              <p className="mt-6 text-[17px] text-slate-500 leading-relaxed">
-                Du markerar vilket arbete som är ROT eller RUT —
-                appen beräknar automatiskt kundens avdrag på 30&nbsp;% och sätter
-                rätt belopp på fakturan.
+              <h3
+                style={{
+                  fontSize: 22, fontWeight: 800, letterSpacing: '-0.025em',
+                  color: '#111', marginBottom: 10, lineHeight: 1.1,
+                }}
+              >
+                Professionella offerter
+              </h3>
+              <p style={{ fontSize: 15, lineHeight: 1.6, color: '#666', maxWidth: '36ch' }}>
+                Skapa och skicka offerter på minuter. ROT och RUT beräknas automatiskt.
+                Kunden godkänner med ett klick.
               </p>
 
-              <ul className="mt-8 space-y-4">
+              {/* Inset invoice card */}
+              <div
+                className="absolute bottom-0 right-0 rounded-tl-2xl"
+                style={{
+                  background: '#fff',
+                  border: '1px solid #E5E5E5',
+                  borderRight: 'none',
+                  borderBottom: 'none',
+                  width: 210,
+                  padding: 18,
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 10, fontWeight: 700, color: '#BBB',
+                    textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12,
+                  }}
+                >
+                  Offert
+                </p>
                 {[
-                  'Stöd för både ROT och RUT på samma offert',
-                  'Rätt belopp beräknas direkt — inga manuella uträkningar',
+                  { label: 'Rörarbete 10 tim', amount: '7 000 kr' },
+                  { label: 'Installationsmaterial',   amount: '4 500 kr' },
+                ].map(({ label, amount }) => (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between"
+                    style={{ marginBottom: 8 }}
+                  >
+                    <span style={{ fontSize: 11, color: '#888' }}>{label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#111', fontVariantNumeric: 'tabular-nums' }}>{amount}</span>
+                  </div>
+                ))}
+                <div
+                  className="flex items-center justify-between"
+                  style={{
+                    background: '#F0FFF4', border: '1px solid #BBF7D0',
+                    borderRadius: 8, padding: '6px 10px', marginTop: 10,
+                  }}
+                >
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#16A34A' }}>ROT-avdrag</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: '#16A34A', fontVariantNumeric: 'tabular-nums' }}>-2 100 kr</span>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Right stack */}
+            <div className="lg:col-span-2 flex flex-col gap-4">
+              {/* Jobbhantering - dark */}
+              <motion.div
+                {...fadeUp(0.1)}
+                className="flex-1 rounded-2xl"
+                style={{ background: '#111', padding: 28, minHeight: 170 }}
+              >
+                <div
+                  className="inline-flex items-center justify-center rounded-xl"
+                  style={{ width: 44, height: 44, background: 'rgba(0,85,255,0.2)', marginBottom: 18 }}
+                >
+                  <Briefcase style={{ width: 20, height: 20, color: '#6699FF' }} strokeWidth={1.5} />
+                </div>
+                <h3
+                  style={{
+                    fontSize: 20, fontWeight: 800, letterSpacing: '-0.025em',
+                    color: '#fff', marginBottom: 10, lineHeight: 1.1,
+                  }}
+                >
+                  Jobbhantering
+                </h3>
+                <p style={{ fontSize: 14, lineHeight: 1.6, color: '#888' }}>
+                  Alla jobb samlade. Se status i realtid och missa aldrig en deadline.
+                </p>
+              </motion.div>
+
+              {/* Fakturor - blue tint */}
+              <motion.div
+                {...fadeUp(0.15)}
+                className="flex-1 rounded-2xl"
+                style={{ background: '#EEF4FF', padding: 28, minHeight: 170 }}
+              >
+                <div
+                  className="inline-flex items-center justify-center rounded-xl"
+                  style={{ width: 44, height: 44, background: '#fff', marginBottom: 18 }}
+                >
+                  <Receipt style={{ width: 20, height: 20, color: '#0055FF' }} strokeWidth={1.5} />
+                </div>
+                <h3
+                  style={{
+                    fontSize: 20, fontWeight: 800, letterSpacing: '-0.025em',
+                    color: '#0044CC', marginBottom: 10, lineHeight: 1.1,
+                  }}
+                >
+                  Fakturor
+                </h3>
+                <p style={{ fontSize: 14, lineHeight: 1.6, color: '#3366BB' }}>
+                  Fakturera direkt när jobbet är klart. PDF, bankgiro och Fortnox-export.
+                </p>
+              </motion.div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      {/* ─── ROT / RUT ──────────────────────────────────────────────────────── */}
+      <section
+        id="rotrut"
+        style={{
+          background: '#F5F5F5',
+          borderTop: '1px solid #E5E5E5',
+          padding: 'clamp(64px, 8vw, 120px) 0',
+        }}
+      >
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px' }}>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center">
+
+            {/* Left */}
+            <motion.div {...fadeUp(0)}>
+              <p
+                style={{
+                  fontSize: 11, fontWeight: 800, color: '#0055FF',
+                  textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 20,
+                }}
+              >
+                ROT &amp; RUT
+              </p>
+              <h2
+                style={{
+                  fontSize: 'clamp(30px, 4vw, 48px)',
+                  fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.05,
+                  color: '#111', marginBottom: 20, textWrap: 'balance',
+                }}
+              >
+                Skatteavdraget räknar vi ut åt dig.
+              </h2>
+              <p style={{ fontSize: 17, lineHeight: 1.65, color: '#666', maxWidth: '40ch', marginBottom: 32 }}>
+                Du väljer vilket arbete som är ROT eller RUT. Appen beräknar automatiskt
+                kundens 30-procentiga avdrag och sätter rätt belopp på fakturan.
+              </p>
+              <ul style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {[
+                  'Stöd för ROT och RUT på samma offert',
+                  'Rätt belopp beräknas direkt, inga manuella uträkningar',
                   'Fakturan visar exakt vad kunden betalar efter avdrag',
-                  'Håller sig uppdaterad med Skatteverkets regler',
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-3">
-                    <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-green-50 border border-green-200 flex items-center justify-center">
-                      <Check className="w-2.5 h-2.5 text-success" strokeWidth={3} />
-                    </span>
-                    <span className="text-[15px] text-slate-600 leading-snug font-medium">{item}</span>
+                  'Uppdateras efter Skatteverkets regler',
+                ].map(item => (
+                  <li key={item} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                    <div
+                      style={{
+                        width: 20, height: 20, borderRadius: '50%',
+                        background: '#F0FFF4', border: '1px solid #BBF7D0',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0, marginTop: 1,
+                      }}
+                    >
+                      <Check style={{ width: 10, height: 10, color: '#16A34A' }} strokeWidth={3} />
+                    </div>
+                    <span style={{ fontSize: 15, fontWeight: 500, color: '#555', lineHeight: 1.5 }}>{item}</span>
                   </li>
                 ))}
               </ul>
             </motion.div>
 
-            {/* Right: invoice card */}
-            <motion.div {...up(0.1)}>
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-
+            {/* Right: Invoice breakdown card */}
+            <motion.div {...fadeUp(0.1)}>
+              <div
+                className="rounded-2xl overflow-hidden"
+                style={{
+                  background: '#fff',
+                  border: '1px solid #E5E5E5',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+                }}
+              >
                 {/* Card header */}
-                <div className="px-6 pt-6 pb-5 border-b border-slate-100">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-[12px] font-semibold text-slate-400 uppercase tracking-widest mb-1">Faktura</p>
-                      <p className="text-[18px] font-bold text-slate-900">#2024-047</p>
-                    </div>
-                    <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 text-[12px] font-semibold px-3 py-1.5 rounded-full border border-green-200">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                      ROT
-                    </span>
+                <div
+                  className="flex items-start justify-between"
+                  style={{ padding: '20px 24px 18px', borderBottom: '1px solid #F0F0F0' }}
+                >
+                  <div>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: '#BBB', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>
+                      Faktura #2024-047
+                    </p>
+                    <p style={{ fontSize: 17, fontWeight: 800, color: '#111', letterSpacing: '-0.02em' }}>
+                      Lindqvist VVS AB
+                    </p>
                   </div>
-                  <p className="text-[14px] text-slate-400 mt-1.5">Lindqvist VVS AB</p>
+                  <span
+                    className="flex items-center gap-1.5"
+                    style={{
+                      fontSize: 11, fontWeight: 700,
+                      padding: '5px 12px', borderRadius: 99,
+                      background: '#F0FFF4', color: '#16A34A',
+                      border: '1px solid #BBF7D0',
+                    }}
+                  >
+                    <span style={{ width: 6, height: 6, background: '#16A34A', borderRadius: '50%' }} />
+                    ROT
+                  </span>
                 </div>
 
                 {/* Line items */}
-                <div className="px-6 py-5 space-y-3">
+                <div style={{ padding: '18px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {[
-                    { label: 'Rörarbete (10 tim × 700 kr)', amount: '7 000 kr', muted: false },
-                    { label: 'Installationsmaterial', amount: '4 500 kr', muted: false },
-                    { label: 'Moms 25 %', amount: '2 875 kr', muted: true },
+                    { label: 'Rörarbete (10 tim x 700 kr)', amount: '7 000 kr', muted: false },
+                    { label: 'Installationsmaterial',        amount: '4 500 kr', muted: false },
+                    { label: 'Moms 25%',                     amount: '2 875 kr', muted: true  },
                   ].map(({ label, amount, muted }) => (
                     <div key={label} className="flex items-center justify-between">
-                      <span className={`text-[14px] ${muted ? 'text-slate-400' : 'text-slate-600'} font-medium`}>
-                        {label}
-                      </span>
-                      <span className={`text-[14px] font-semibold tabular-nums ${muted ? 'text-slate-400' : 'text-slate-800'}`}>
-                        {amount}
-                      </span>
+                      <span style={{ fontSize: 14, fontWeight: 500, color: muted ? '#CCC' : '#666' }}>{label}</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: muted ? '#CCC' : '#333', fontVariantNumeric: 'tabular-nums' }}>{amount}</span>
                     </div>
                   ))}
                 </div>
 
                 {/* ROT deduction */}
-                <div className="mx-6 rounded-xl bg-green-50 border border-green-100 px-4 py-3.5 mb-5">
+                <div style={{ margin: '0 20px 16px', borderRadius: 12, background: '#F0FFF4', border: '1px solid #BBF7D0', padding: '12px 14px' }}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Check className="w-4 h-4 text-success flex-shrink-0" strokeWidth={2.5} />
-                      <span className="text-[14px] font-semibold text-green-800">
-                        ROT-avdrag (30&nbsp;% av arbete)
-                      </span>
+                      <Check style={{ width: 15, height: 15, color: '#16A34A', flexShrink: 0 }} strokeWidth={2.5} />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#15803D' }}>ROT-avdrag (30% av arbete)</span>
                     </div>
-                    <span className="text-[15px] font-bold text-green-700 tabular-nums">−2 100 kr</span>
+                    <span style={{ fontSize: 15, fontWeight: 800, color: '#15803D', fontVariantNumeric: 'tabular-nums' }}>-2 100 kr</span>
                   </div>
-                  <p className="text-[12px] text-success mt-1 ml-6">Beräknat automatiskt</p>
+                  <p style={{ fontSize: 11, color: '#22C55E', marginTop: 4, marginLeft: 23 }}>Beräknat automatiskt</p>
                 </div>
 
                 {/* Total */}
-                <div className="mx-6 mb-6 bg-slate-900 rounded-xl px-5 py-4 flex items-center justify-between">
-                  <span className="text-[15px] font-semibold text-white">Att betala</span>
-                  <span className="text-[22px] font-bold text-white tabular-nums tracking-tight">12 275 kr</span>
+                <div
+                  className="flex items-center justify-between"
+                  style={{ margin: '0 20px 20px', borderRadius: 12, background: '#111', padding: '14px 18px' }}
+                >
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>Att betala</span>
+                  <span style={{ fontSize: 22, fontWeight: 800, color: '#fff', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.03em' }}>
+                    12 275 kr
+                  </span>
                 </div>
               </div>
             </motion.div>
@@ -1042,111 +1103,312 @@ export default function Home() {
       </section>
 
 
-      {/* ── Final CTA ──────────────────────────────────────────────────────── */}
-      <section id="pricing" className="py-28 sm:py-36 bg-slate-50">
-        <div className="max-w-2xl mx-auto px-6 text-center">
+      {/* ─── How it works ───────────────────────────────────────────────────── */}
+      <section id="how" style={{ background: '#fff', padding: 'clamp(64px, 8vw, 120px) 0' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px' }}>
 
-          <motion.div {...up(0)}>
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-blue-600 shadow-lg shadow-gray-900/15 mb-8">
-              <Wrench className="w-6 h-6 text-white" strokeWidth={2} />
-            </div>
-
-            <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 tracking-tight leading-[1.1] mb-5">
-              60 dagar helt gratis.
+          <motion.div {...fadeUp(0)} style={{ marginBottom: 64 }}>
+            <h2
+              style={{
+                fontSize: 'clamp(32px, 4vw, 52px)',
+                fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.05,
+                color: '#111',
+              }}
+            >
+              Tre steg till bättre vardag.
             </h2>
+          </motion.div>
 
-            <p className="text-[18px] text-slate-500 leading-relaxed mb-10">
-              Testa alla funktioner utan kostnad i 60 dagar — inget kreditkort krävs.
-              Uppgradera när du är redo, eller avsluta utan kostnad.
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-10 lg:gap-16 relative">
+            {/* Connecting line */}
+            <div
+              aria-hidden="true"
+              className="hidden md:block absolute pointer-events-none"
+              style={{
+                top: 22,
+                left: 'calc(33.3% + 24px)',
+                right: 'calc(33.3% + 24px)',
+                height: 1,
+                background: 'linear-gradient(90deg, #E5E5E5, #0055FF55, #E5E5E5)',
+              }}
+            />
+
+            {[
+              {
+                icon: FileText,
+                label: 'Offert',
+                body: 'Välj arbetsmoment och material. ROT och RUT räknas ut automatiskt. Kunden godkänner med ett klick.',
+              },
+              {
+                icon: Briefcase,
+                label: 'Jobb',
+                body: 'Håll koll på alla pågående och planerade jobb. Se status i realtid direkt från mobilen på arbetsplatsen.',
+              },
+              {
+                icon: Receipt,
+                label: 'Faktura',
+                body: 'Konvertera godkänd offert till faktura direkt. PDF-export och Fortnox-integration klart ur lådan.',
+              },
+            ].map(({ icon: Icon, label, body }, i) => (
+              <motion.div key={label} {...fadeUp(i * 0.08)}>
+                <div
+                  className="flex items-center justify-center rounded-2xl"
+                  style={{ width: 44, height: 44, background: '#111', marginBottom: 24 }}
+                >
+                  <Icon style={{ width: 20, height: 20, color: '#fff' }} strokeWidth={1.5} />
+                </div>
+                <h3
+                  style={{
+                    fontSize: 20, fontWeight: 800, letterSpacing: '-0.025em',
+                    color: '#111', marginBottom: 12, lineHeight: 1.1,
+                  }}
+                >
+                  {label}
+                </h3>
+                <p style={{ fontSize: 15, lineHeight: 1.65, color: '#666', maxWidth: '30ch' }}>
+                  {body}
+                </p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+
+      {/* ─── Pricing ────────────────────────────────────────────────────────── */}
+      <section
+        id="pricing"
+        style={{
+          background: '#F5F5F5',
+          borderTop: '1px solid #E5E5E5',
+          padding: 'clamp(64px, 8vw, 120px) 0',
+        }}
+      >
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px' }}>
+
+          <motion.div {...fadeUp(0)} style={{ marginBottom: 56 }}>
+            <h2
+              style={{
+                fontSize: 'clamp(32px, 4vw, 52px)',
+                fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.05,
+                color: '#111', marginBottom: 16,
+              }}
+            >
+              Enkla priser.
+            </h2>
+            <p style={{ fontSize: 17, lineHeight: 1.65, color: '#666', maxWidth: '36ch' }}>
+              Börja gratis i 60 dagar. Uppgradera när du är redo.
             </p>
+          </motion.div>
 
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
+            {PLANS.map((plan, i) => (
+              <PricingCard
+                key={plan.name}
+                {...plan}
+                delay={i * 0.07}
+                onSignup={() => navigate('/signup')}
+              />
+            ))}
+          </div>
+
+          <motion.p
+            {...fadeIn(0.25)}
+            style={{ textAlign: 'center', fontSize: 13, color: '#AAA', marginTop: 24 }}
+          >
+            Alla priser exkl. moms. Avsluta när som helst.
+          </motion.p>
+        </div>
+      </section>
+
+
+      {/* ─── Final CTA ──────────────────────────────────────────────────────── */}
+      <section
+        className="relative overflow-hidden"
+        style={{ background: '#060A14', padding: 'clamp(80px, 10vw, 140px) 0' }}
+      >
+        {/* Subtle blue glow */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: 'radial-gradient(ellipse 60% 50% at 50% 110%, rgba(0,85,255,0.14), transparent)',
+          }}
+        />
+
+        <div
+          className="relative text-center px-6"
+          style={{ maxWidth: 720, margin: '0 auto' }}
+        >
+          <motion.h2
+            {...fadeUp(0)}
+            style={{
+              fontSize: 'clamp(40px, 6vw, 72px)',
+              fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1.0,
+              color: '#fff', marginBottom: 20, textWrap: 'balance',
+            }}
+          >
+            Börja spara tid idag.
+          </motion.h2>
+
+          <motion.p
+            {...fadeUp(0.07)}
+            style={{
+              fontSize: 18, lineHeight: 1.65,
+              color: 'rgba(255,255,255,0.5)',
+              maxWidth: '38ch', margin: '0 auto 40px',
+            }}
+          >
+            60 dagar gratis. Inget kreditkort. Avsluta när du vill.
+          </motion.p>
+
+          <motion.div
+            {...fadeUp(0.13)}
+            style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+          >
             <button
               onClick={() => navigate('/signup')}
-              className="group inline-flex items-center gap-2 bg-blue-600 hover:bg-primary-dark active:bg-primary-darker text-white font-semibold text-[17px] px-10 py-4 rounded-xl transition-all hover:-translate-y-px"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                background: '#fff', color: '#111',
+                fontSize: 15, fontWeight: 700,
+                padding: '14px 28px', borderRadius: 12, border: 'none', cursor: 'pointer',
+                transition: 'transform 140ms, box-shadow 140ms',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 28px rgba(255,255,255,0.15)' }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none' }}
+              onMouseDown={e => { e.currentTarget.style.transform = 'scale(0.97)' }}
+              onMouseUp={e => { e.currentTarget.style.transform = '' }}
             >
               Kom igång gratis
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              <ArrowRight style={{ width: 16, height: 16 }} />
             </button>
-
-            <p className="mt-3 text-[13px] font-medium" style={{ color: '#666666' }}>
-              ✓ 60 dagar gratis — inget kreditkort krävs
-            </p>
-
-            <div className="flex items-center justify-center gap-6 mt-6 text-[13px] text-slate-400 font-medium">
-              <span className="flex items-center gap-1.5">
-                <Check className="w-3.5 h-3.5 text-blue-600" strokeWidth={3} />
-                Första 60 dagarna gratis
-              </span>
-              <span className="w-px h-3.5 bg-slate-200" />
-              <span className="flex items-center gap-1.5">
-                <Check className="w-3.5 h-3.5 text-blue-600" strokeWidth={3} />
-                Inget kreditkort
-              </span>
-              <span className="w-px h-3.5 bg-slate-200" />
-              <span className="flex items-center gap-1.5">
-                <Check className="w-3.5 h-3.5 text-blue-600" strokeWidth={3} />
-                Avsluta när som helst
-              </span>
-            </div>
+            <button
+              onClick={() => navigate('/login')}
+              className="btn-ghost"
+            >
+              Logga in
+            </button>
           </motion.div>
         </div>
       </section>
 
 
-      {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer className="bg-white border-t border-slate-100">
-        <div className="max-w-6xl mx-auto px-6 py-14">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-10">
+      {/* ─── Footer ─────────────────────────────────────────────────────────── */}
+      <footer style={{ background: '#060A14', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div
+          style={{ maxWidth: 1280, margin: '0 auto', padding: '56px 24px 48px' }}
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-10 mb-12">
 
             {/* Brand */}
-            <div>
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
-                  <Wrench className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+            <div className="col-span-2 sm:col-span-2">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div
+                  className="flex items-center justify-center rounded-xl"
+                  style={{ width: 30, height: 30, background: '#0055FF', flexShrink: 0 }}
+                >
+                  <Wrench style={{ width: 14, height: 14, color: '#fff' }} strokeWidth={2.5} />
                 </div>
-                <span className="font-semibold text-[15px] text-slate-900">Hantverksappen</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>
+                  Hantverksappen
+                </span>
               </div>
-              <p className="text-[13px] text-slate-400 max-w-xs leading-relaxed">
+              <p style={{ fontSize: 14, lineHeight: 1.7, color: 'rgba(255,255,255,0.35)', maxWidth: '34ch' }}>
                 Administration för hantverkare som vill ägna mer tid åt hantverket.
               </p>
             </div>
 
-            {/* Links */}
-            <nav className="grid grid-cols-2 sm:flex sm:flex-row gap-x-8 gap-y-3">
+            {/* Produkt links */}
+            <div>
+              <p
+                style={{
+                  fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.25)',
+                  textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16,
+                }}
+              >
+                Produkt
+              </p>
               {[
-                { label: 'Funktioner', href: '#features' },
-                { label: 'ROT & RUT', href: '#rotrut' },
-                { label: 'Logga in', href: '/login', nav: true },
-                { label: 'Integritetspolicy', href: '#' },
-                { label: 'Kontakt', href: '#' },
-              ].map(({ label, href, nav: isNav }) => (
-                isNav ? (
+                { label: 'Funktioner',       href: '#features' },
+                { label: 'ROT och RUT',      href: '#rotrut'   },
+                { label: 'Hur det fungerar', href: '#how'      },
+                { label: 'Priser',           href: '#pricing'  },
+              ].map(({ label, href }) => (
+                <a
+                  key={label}
+                  href={href}
+                  style={{
+                    display: 'block', fontSize: 14,
+                    color: 'rgba(255,255,255,0.4)', marginBottom: 10,
+                    textDecoration: 'none', transition: 'color 150ms',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.8)' }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)' }}
+                >
+                  {label}
+                </a>
+              ))}
+            </div>
+
+            {/* Konto links */}
+            <div>
+              <p
+                style={{
+                  fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.25)',
+                  textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16,
+                }}
+              >
+                Konto
+              </p>
+              {[
+                { label: 'Logga in',        onClick: () => navigate('/login')  },
+                { label: 'Skapa konto',     onClick: () => navigate('/signup') },
+                { label: 'Integritetspolicy', onClick: null },
+                { label: 'Kontakt',         onClick: null },
+              ].map(({ label, onClick }) => (
+                onClick ? (
                   <button
                     key={label}
-                    onClick={() => navigate(href)}
-                    className="text-[14px] text-slate-500 hover:text-slate-900 transition-colors font-medium text-left"
+                    onClick={onClick}
+                    style={{
+                      display: 'block', fontSize: 14, textAlign: 'left',
+                      color: 'rgba(255,255,255,0.4)', marginBottom: 10,
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      padding: 0, transition: 'color 150ms',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.8)' }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)' }}
                   >
                     {label}
                   </button>
                 ) : (
                   <a
                     key={label}
-                    href={href}
-                    className="text-[14px] text-slate-500 hover:text-slate-900 transition-colors font-medium"
+                    href="#"
+                    style={{
+                      display: 'block', fontSize: 14,
+                      color: 'rgba(255,255,255,0.4)', marginBottom: 10,
+                      textDecoration: 'none', transition: 'color 150ms',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.8)' }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)' }}
                   >
                     {label}
                   </a>
                 )
               ))}
-            </nav>
+            </div>
           </div>
 
-          <HR />
-          <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-[13px] text-slate-400">
+          <div
+            className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-8"
+            style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+          >
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.2)' }}>
               © 2026 Hantverksappen. Alla rättigheter förbehållna.
             </p>
-            <p className="text-[13px] text-slate-400">
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.2)' }}>
               Tillverkad med omsorg i Sverige
             </p>
           </div>
@@ -1154,5 +1416,6 @@ export default function Home() {
       </footer>
 
     </div>
+    </MotionConfig>
   )
 }

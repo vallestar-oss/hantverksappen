@@ -1,11 +1,15 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import Page from '../components/Premium'
 import EmptyState from '../components/EmptyState'
 import { FileText, Plus, Check } from 'lucide-react'
 import { SkeletonListRow } from '../components/Skeleton'
+import { useToast } from '../hooks/useToast'
+import { formatSEK } from '../lib/format'
+import { formatDate } from '../lib/date'
+import { documentTotal } from '../utils/calc'
 
 const STATUSES = [
   { key: 'alla',    label: 'Alla' },
@@ -29,38 +33,32 @@ const STATUS_LABEL = {
   avvisad: 'Avvisad',
 }
 
-function formatSEK(amount) {
-  return new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 0 }).format(amount) + ' kr'
-}
-
-function formatDate(iso) {
-  if (!iso) return ''
-  return new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso))
-}
-
-function calcTotal(items = []) {
-  return items.reduce((sum, item) => sum + (item.quantity ?? 0) * (item.unit_price ?? 0), 0)
-}
-
 export default function Quotes() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const showToast = useToast()
   const [quotes, setQuotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState('skickad')
 
   useEffect(() => {
+    let active = true
+
     async function fetchQuotes() {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('quotes')
-        .select('*, customers(name), quote_items(unit_price, quantity)')
+        .select('*, customers(name), quote_items(type, unit_price, quantity, vat_rate)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
+      if (!active) return
+      if (error) showToast('Kunde inte hämta offerter. Ladda om sidan.', 'error')
       setQuotes(data ?? [])
       setLoading(false)
     }
+
     fetchQuotes()
-  }, [user.id])
+    return () => { active = false }
+  }, [user.id, showToast])
 
   const filtered = useMemo(() => {
     if (activeFilter === 'alla') return quotes
@@ -124,7 +122,7 @@ export default function Quotes() {
               {/* Mobile: card list */}
               <div className="md:hidden space-y-2">
                 {filtered.map(quote => {
-                  const total = calcTotal(quote.quote_items)
+                  const total = documentTotal(quote.quote_items, quote.rot_rut_enabled)
                   const status = quote.status ?? 'utkast'
                   return (
                     <button
@@ -144,7 +142,7 @@ export default function Quotes() {
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                        <span className="text-sm font-bold text-gray-800 tabular-nums">{formatSEK(total)}</span>
+                        <span className="text-sm font-bold text-gray-800 tabular-nums">{formatSEK(total, { max: 0 })}</span>
                         <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${BADGE[status] ?? BADGE.utkast}`}>
                           {status === 'godkänd' && <Check className="w-3 h-3" strokeWidth={3} />}
                           {STATUS_LABEL[status] ?? status}
@@ -169,7 +167,7 @@ export default function Quotes() {
                   </thead>
                   <tbody>
                     {filtered.map((quote, i) => {
-                      const total = calcTotal(quote.quote_items)
+                      const total = documentTotal(quote.quote_items, quote.rot_rut_enabled)
                       const status = quote.status ?? 'utkast'
                       return (
                         <tr
@@ -181,8 +179,8 @@ export default function Quotes() {
                             #{quote.quote_number ?? quote.id.slice(0, 8).toUpperCase()}
                           </td>
                           <td className="px-5 py-4 text-gray-700">{quote.customers?.name ?? '–'}</td>
-                          <td className="px-5 py-4 text-gray-500">{formatDate(quote.created_at)}</td>
-                          <td className="px-5 py-4 text-right font-semibold text-gray-800 tabular-nums">{formatSEK(total)}</td>
+                          <td className="px-5 py-4 text-gray-500">{formatDate(quote.created_at, { style: 'medium', fallback: '' })}</td>
+                          <td className="px-5 py-4 text-right font-semibold text-gray-800 tabular-nums">{formatSEK(total, { max: 0 })}</td>
                           <td className="px-5 py-4">
                             <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${BADGE[status] ?? BADGE.utkast}`}>
                               {status === 'godkänd' && <Check className="w-3 h-3" strokeWidth={3} />}

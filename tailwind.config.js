@@ -13,8 +13,8 @@
 // resolves to a design-system value. No random colors.
 
 const neutral = {
-  50:  '#F8F8F8',
-  100: '#F0F0F0',
+  50:  '#F5F4F2',
+  100: '#EEECE9',
   200: '#E5E5E5',
   300: '#D4D4D4',
   400: '#999999',
@@ -45,6 +45,9 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['"Geist Variable"', 'Geist', 'system-ui', '-apple-system', 'sans-serif'],
+      },
       colors: {
         // App design-system colors (used throughout existing pages)
         primary: {
